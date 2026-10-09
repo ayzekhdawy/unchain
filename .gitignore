@@ -11,3 +11,4 @@ apps/android/.gradle/
 apps/android/**/build/
 local.properties
 apps/web/public/pdf.worker.min.mjs
+apps/web/public/ort/

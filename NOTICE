@@ -21,4 +21,8 @@ https://github.com/mwilliamson/mammoth.js
 EPUB packages are read with fflate, licensed under the MIT License.
 https://github.com/101arrowz/fflate
 
+The voice graph runs with ONNX Runtime Web, licensed under the MIT License.
+Copyright (c) Microsoft Corporation.
+https://github.com/microsoft/onnxruntime
+
 Commercial redistributions must also keep ATTRIBUTION.md.

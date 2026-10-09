@@ -5,10 +5,11 @@ Türkçe kitabı telefonda sese çevirir. Metin ve ses cihazdan çıkmaz.
 Site: [unchain.noniux.com](https://unchain.noniux.com)
 
 Unchain açık kaynak bir okuyucudur. Web okuyucusu PDF, EPUB, DOCX, TXT ve MD
-dosyalarını tarayıcıda bölümlere ayırır; dosya sunucuya gitmez. Çalma şimdilik
-tarayıcının kendi sesidir ve ekranda böyle yazar. Hedef ses
+dosyalarını tarayıcıda bölümlere ayırır; dosya sunucuya gitmez. Ses
 [EMA Lightning](https://huggingface.co/canberkkkkkk/ema-lightning): tek ses,
-yaklaşık 34 MB, Apache 2.0. Telefon uygulaması henüz kurulmaz. Masaüstü arayüz
+yaklaşık 34 MB, Apache 2.0. Web okuyucu bu sesi tarayıcıda, üç ONNX grafiğiyle
+üretir. Üretim olmazsa ekranda “Tarayıcı önizlemesi. Ema sesi değil.” yazar.
+Telefon uygulaması henüz kurulmaz ve Ema’yı taşımaz. Masaüstü arayüz
 `unchain.noniux.com` üzerinde, Vercel’de durur.
 
 ## Vizyon
@@ -34,12 +35,21 @@ tools           Ölçüm betiği
 
 ## Ses
 
-EMA Lightning bugün Python ve PyTorch’tur. Bu dizüstü bilgisayarın CPU’sunda,
-ağırlıklar önbellekteyken ilk cümle 0.37 saniyede, uzun paragraf gerçek
-zamandan hızlı üretildi. İlk kurulum çağrısı 24 saniye sürdü. Telefon ve
-ONNX dışa aktarımı henüz ölçülmedi. Ayrıntı
-[docs/spike-ema.md](docs/spike-ema.md) içindedir. Web’deki çalma tarayıcı
-önizlemesidir ve ekranda böyle yazar. Ema sesi değildir.
+Web okuyucu Ema’yı tarayıcıda üretir. Grafikler `apps/web/public/ema` altındadır:
+metin, ses ve çözücü. Çalışma zamanı onnxruntime-web 1.30.0, tek WASM iş
+parçacığı, COOP/COEP yok. Ağırlıklar yüklendikten sonra bu makinedeki Chrome
+penceresinde ilk cümle 0.9 saniyede üretime geçti. Bant “Ema. Bu ses yapay
+zekâ ile üretilmiştir.” yazar. Üretim olmazsa yazı “Tarayıcı önizlemesi. Ema
+sesi değil.” olur.
+
+Aynı dizüstünün CPU’sunda PyTorch, ağırlıklar önbellekteyken ilk cümleyi 0.37
+saniyede üretti. İlk kurulum çağrısı 24 saniye sürdü. Bu iki sayı ayrı
+ölçümdür. ONNX ile yamalı PyTorch ilgileşimi 1.0, en büyük mutlak fark
+8e-06. Ayrıntı [docs/spike-ema.md](docs/spike-ema.md) içindedir.
+
+Telefon uygulamasında Ema yok. ExecuTorch denenmedi. PyTorch bir Vercel
+fonksiyonuna konmaz. Hoparlör bu ölçümde dinlenmedi; doğrulama ekran
+yazısı, düğme adı ve sözcük kapsülüdür.
 
 ## Lisans
 

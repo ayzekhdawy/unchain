@@ -13,6 +13,7 @@ import {
   type Cursor,
   type Library
 } from "@/lib/books";
+import { emaSpeak, loadEma, resampleLinear, resumeAudio } from "@/lib/ema";
 import { ImportError, importFile } from "@/lib/import";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
@@ -63,6 +64,9 @@ export function UnchainApp() {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [playing, setPlaying] = useState(false);
   const [word, setWord] = useState(0);
+  const [voice, setVoice] = useState<"loading" | "ready" | "generating" | "fallback">("loading");
+  const [emaSeconds, setEmaSeconds] = useState<number | null>(null);
+  const [voiceError, setVoiceError] = useState("");
   const [sleep, setSleep] = useState("off");
   const [draft, setDraft] = useState("");
   const [link, setLink] = useState("https://");
@@ -76,6 +80,8 @@ export function UnchainApp() {
   const [pronTo, setPronTo] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const sleepUntil = useRef<number | null>(null);
+  const emaOk = useRef(true);
+  const heardEma = useRef(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("unchain.library.v1");
@@ -103,24 +109,36 @@ export function UnchainApp() {
   const cursor = lib.cursor;
 
   useEffect(() => {
+    if (view !== "reader") return;
+    let gone = false;
+    setVoice((current) => (current === "ready" || current === "generating" ? current : "loading"));
+    loadEma()
+      .then(() => {
+        if (gone) return;
+        emaOk.current = true;
+        setVoice((current) => (current === "generating" ? current : "ready"));
+      })
+      .catch((err: unknown) => {
+        if (gone) return;
+        emaOk.current = false;
+        setVoiceError(err instanceof Error ? err.message : "yükleme");
+        setVoice("fallback");
+      });
+    return () => {
+      gone = true;
+    };
+  }, [view]);
+
+  useEffect(() => {
     if (!playing || !book || !cursor) return;
+    const handle = { cancelled: false, timer: 0, source: null as AudioBufferSourceNode | null };
     const spokenBook = sentenceAt(book, cursor);
-    const spoken = applySpeech(spokenBook.sentence.text, lib.pronunciations);
     const tokens = spokenBook.sentence.text.split(/\s+/);
-    const ms = Math.max(700, ((spoken.length / 900) * 60_000) / lib.speed);
-    const utter = new SpeechSynthesisUtterance(spoken);
-    utter.lang = "tr-TR";
-    utter.rate = Math.min(2, Math.max(0.5, lib.speed));
-    const voices = window.speechSynthesis.getVoices();
-    const turkish = voices.find((v) => v.lang.toLowerCase().startsWith("tr"));
-    if (turkish) utter.voice = turkish;
-    let step = 0;
-    const timer = window.setInterval(() => {
-      step += 1;
-      if (step < tokens.length) setWord(step);
-    }, ms / Math.max(1, tokens.length));
-    utter.onend = () => {
-      window.clearInterval(timer);
+    const prepared = applySpeech(spokenBook.sentence.text, lib.pronunciations);
+    setWord(0);
+
+    const advance = () => {
+      if (handle.cancelled) return;
       if (sleepUntil.current && Date.now() >= sleepUntil.current) {
         setPlaying(false);
         return;
@@ -135,10 +153,96 @@ export function UnchainApp() {
       setWord(0);
       setLib((prev) => ({ ...prev, cursor: next, currentId: book.id }));
     };
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utter);
+
+    const browser = () => {
+      setVoice("fallback");
+      const ms = Math.max(700, ((prepared.length / 900) * 60_000) / lib.speed);
+      const utter = new SpeechSynthesisUtterance(prepared);
+      utter.lang = "tr-TR";
+      utter.rate = Math.min(2, Math.max(0.5, lib.speed));
+      const voices = window.speechSynthesis.getVoices();
+      const turkish = voices.find((item) => item.lang.toLowerCase().startsWith("tr"));
+      if (turkish) utter.voice = turkish;
+      let step = 0;
+      handle.timer = window.setInterval(() => {
+        step += 1;
+        if (step < tokens.length) setWord(step);
+      }, ms / Math.max(1, tokens.length));
+      utter.onend = () => {
+        if (handle.cancelled) return;
+        window.clearInterval(handle.timer);
+        advance();
+      };
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    };
+
+    const run = async () => {
+      if (!emaOk.current) {
+        browser();
+        return;
+      }
+      setVoice((current) => (current === "fallback" ? current : "generating"));
+      const started = performance.now();
+      try {
+        const upcoming = moveSentences(book, cursor, 1);
+        const atEnd = upcoming.chapter === cursor.chapter && upcoming.sentence === cursor.sentence;
+        if (!atEnd) {
+          const nextText = applySpeech(sentenceAt(book, upcoming).sentence.text, lib.pronunciations);
+          void emaSpeak(nextText, lib.speed, 0).catch(() => undefined);
+        }
+        const clip = await emaSpeak(prepared, lib.speed, 0);
+        if (handle.cancelled) return;
+        const ctx = resumeAudio();
+        if (!ctx) throw new Error("ses yok");
+        if (ctx.state !== "running") await ctx.resume();
+        if (handle.cancelled) return;
+        const pcm = resampleLinear(clip.pcm, clip.sampleRate, ctx.sampleRate);
+        const samples = new Float32Array(Math.max(1, pcm.length));
+        if (pcm.length) samples.set(pcm);
+        const buffer = ctx.createBuffer(1, samples.length, ctx.sampleRate);
+        buffer.copyToChannel(samples, 0);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        handle.source = source;
+        source.onended = () => {
+          window.clearInterval(handle.timer);
+          advance();
+        };
+        const origin = ctx.currentTime;
+        source.start();
+        setVoice("ready");
+        setVoiceError("");
+        if (!heardEma.current) {
+          heardEma.current = true;
+          setEmaSeconds((performance.now() - started) / 1000);
+        }
+        handle.timer = window.setInterval(() => {
+          const at = ctx.currentTime - origin;
+          let index = 0;
+          while (index + 1 < clip.wordStarts.length && clip.wordStarts[index + 1] <= at) index += 1;
+          setWord(tokens.length ? Math.min(index, tokens.length - 1) : 0);
+        }, 40);
+      } catch (err) {
+        if (handle.cancelled) return;
+        console.error("Ema üretilemedi", err);
+        setVoiceError(err instanceof Error ? err.message : "üretim");
+        browser();
+      }
+    };
+    void run();
     return () => {
-      window.clearInterval(timer);
+      handle.cancelled = true;
+      window.clearInterval(handle.timer);
+      if (handle.source) {
+        try {
+          handle.source.onended = null;
+          handle.source.stop();
+        } catch {
+          /* already ended */
+        }
+      }
       window.speechSynthesis.cancel();
     };
   }, [playing, book, cursor, lib.speed, lib.pronunciations, sleep]);
@@ -177,6 +281,11 @@ export function UnchainApp() {
   function skip(seconds: number) {
     if (!book || !cursor) return;
     seek(moveBySeconds(book, cursor, seconds, lib.speed));
+  }
+
+  function togglePlay() {
+    resumeAudio();
+    setPlaying((value) => !value);
   }
 
   function addBook(next: Book, warning?: string | null) {
@@ -426,7 +535,7 @@ export function UnchainApp() {
                 value={lib.speed}
                 onChange={(e) => setLib((prev) => ({ ...prev, speed: Number(e.target.value) }))}
               />
-              <p className="note">Önizleme tarayıcı sesidir. Ema, ölçüm geçince bağlanır.</p>
+              <p className="note">Ema bu tarayıcıda üretilir. Metin cihazdan çıkmaz. Üretim olmazsa okuyucu tarayıcı önizlemesi yazar.</p>
             </article>
             <p className="section-label">Söyleyiş sözlüğü</p>
             <form
@@ -538,7 +647,15 @@ export function UnchainApp() {
                 …
               </button>
             </div>
-            <p className="note">Tarayıcı önizlemesi. Ema sesi değil. Bu ürünün sesi yapay zekâ ile üretilecektir.</p>
+            <p className="note" data-voice={voice} data-ema-wait={emaSeconds ?? ""} data-ema-error={voiceError}>
+              {voice === "fallback"
+                ? "Tarayıcı önizlemesi. Ema sesi değil. Bu ürünün sesi yapay zekâ ile üretilecektir."
+                : voice === "generating"
+                  ? "Ema üretiyor. Metin bu tarayıcıda kalır."
+                  : voice === "loading"
+                    ? "Ema yükleniyor. Metin bu tarayıcıda kalır."
+                    : `Ema. Bu ses yapay zekâ ile üretilmiştir.${emaSeconds !== null ? ` İlk cümle ${emaSeconds.toFixed(1)} saniyede üretildi.` : ""}`}
+            </p>
             {importNote && <p className="note">{importNote}</p>}
             <article>
               {book.chapters.map((chapter, ci) => (
@@ -582,7 +699,7 @@ export function UnchainApp() {
                 <button className="ghost" onClick={() => skip(-15)} aria-label="15 saniye geri">
                   15
                 </button>
-                <button className="play" onClick={() => setPlaying((v) => !v)} aria-label={playing ? "Durdur" : "Oynat"}>
+                <button className="play" onClick={togglePlay} aria-label={playing ? "Durdur" : "Oynat"}>
                   {playing ? "II" : "▶"}
                 </button>
                 <button className="ghost" onClick={() => skip(30)} aria-label="30 saniye ileri">
@@ -610,7 +727,7 @@ export function UnchainApp() {
             <h2 style={{ fontSize: 22 }}>{book.title}</h2>
             <p className="meta">{book.author}</p>
             <p className="meta">{chapterTitle}</p>
-            <button className="btn solid" onClick={() => (view === "reader" ? setPlaying((v) => !v) : openReader(book))}>
+            <button className="btn solid" onClick={() => (view === "reader" ? togglePlay() : openReader(book))}>
               {playing ? "Durdur" : "Dinle"}
             </button>
             <p className="note">Masaüstünde okuyucu bu kolonun yanında açılır. Kitaplık verisi bu tarayıcıda tutulur.</p>
@@ -630,7 +747,7 @@ export function UnchainApp() {
           <button className="ghost" onClick={() => skip(-15)}>
             15
           </button>
-          <button className="play" onClick={() => setPlaying((v) => !v)} aria-label={playing ? "Durdur" : "Oynat"}>
+          <button className="play" onClick={togglePlay} aria-label={playing ? "Durdur" : "Oynat"}>
             {playing ? "II" : "▶"}
           </button>
         </div>

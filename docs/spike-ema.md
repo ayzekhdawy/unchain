@@ -25,8 +25,9 @@ Hugging Face’ten iner (yaklaşık 34 MB). PyTorch CPU tekeri ayrıca iner.
 
 ## Karaoke
 
-`say()` her sözcüğün başlangıç ve bitişini `speech.words` ile verir. Okuyucudaki
-yeşil kapsül bu zamanlara bağlanacak. Önizleme bunları kullanmaz.
+`say()` her sözcüğün başlangıç ve bitişini `speech.words` ile verir. Web
+okuyucudaki yeşil kapsül Python zamanını kullanmaz. ONNX zaman çizelgesindeki
+`fw` dizisini 25 Hz ile izler. Önizleme bunları kullanmaz.
 
 ## Bu makinede ölçülen
 
@@ -44,6 +45,33 @@ hem ilk ses hem gerçek zaman eşiği geçti.
 `speech.words` sözcük zamanı veriyor. “zekâ” normalleştirmeden “zeka” olarak
 dönüyor. Karaoke bu zamanlara bağlanabilir.
 
-Telefon ölçülmedi. ONNX ve ExecuTorch dışa aktarımı denenmedi. Bu yüzden
-oynatıcıya Ema bağlanmadı. Web’deki çalma tarayıcı önizlemesidir ve ekranda
-böyle yazılır. PyTorch bir Vercel fonksiyonuna konmaz.
+## ONNX
+
+`tools/export_ema_onnx.py` üç grafiği legacy TorchScript ile, opset 17, dışa
+aktarır. `torch.expm1` dışa aktarımdan önce `exp(x) - 1` olur. Dikkat katmanı
+eager matmul kullanır. NVIDIA `.lightning()` gerekmez.
+
+Ölçülen cümle “Merhaba. Bu ses yapay zekâ ile üretilmiştir.” ONNX ile yamalı
+PyTorch arasında ilgileşim 1.0, en büyük mutlak fark 8e-06. Kısa “Deneme.”
+14 kare, 26880 örnek verir.
+
+Dosyalar `apps/web/public/ema` altındadır: `text.onnx` 4.81 MB, `sound.onnx`
+18.09 MB, `decoder.onnx` 12.04 MB, `meta.json`. Zaman çizelgesi sabiti
+`apps/web/fixtures/ema-timeline.json` dosyasındadır. `npm run check:ema` bunu
+doğrular.
+
+## Tarayıcı
+
+onnxruntime-web 1.30.0. Tek iş parçacığı (`numThreads = 1`), vekil yok,
+COOP/COEP yok. Oturumlar sırayla açılır. Önbellek adı `unchain-ema-v1`.
+
+Yerel üretim sunucusunda (`next start`, 2026-10-09, Chrome) ağırlıklar
+önceden yüklenmişken Oynat’tan sonra bant “İlk cümle 0.9 saniyede üretildi.”
+yazdı. Oynat düğmesinin adı “Durdur” oldu. Bölüm “Cümle cümle”ye geçti. Yeşil
+kapsül “geri” sözcüğündeydi. Bu, “Tarayıcı önizlemesi. Ema sesi değil.”
+cümlesi değildir. Hoparlör dinlenmedi.
+
+Üretim başarısız olursa bant yine “Tarayıcı önizlemesi. Ema sesi değil.” olur.
+
+Telefon ölçülmedi. ExecuTorch denenmedi. PyTorch bir Vercel fonksiyonuna
+konmaz. Android paketinde Ema yok.
