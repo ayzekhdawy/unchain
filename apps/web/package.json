@@ -6,7 +6,8 @@
     "build": "node scripts/copy-pdf-worker.mjs && next build",
     "start": "next start",
     "check:import": "tsx scripts/check-import.ts",
-    "check:ema": "tsx scripts/check-ema.ts"
+    "check:ema": "tsx scripts/check-ema.ts",
+    "check:catalog": "tsx scripts/check-catalog.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",

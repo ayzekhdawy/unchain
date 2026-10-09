@@ -1,24 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  addCollection,
   applySpeech,
+  assignCollection,
   bookFromText,
+  bookHaystack,
   emptyLibrary,
+  formatSpoken,
   moveBySeconds,
   moveSentences,
+  normalizeLibrary,
   progressOf,
   sentenceAt,
+  shelfKind,
   type Book,
   type Cursor,
-  type Library
+  type Library,
+  type ShelfKind
 } from "@/lib/books";
+import { bookFromCatalog, CATALOG, type CatalogShelf, type CatalogWork } from "@/lib/catalog";
 import { emaSpeak, loadEma, resampleLinear, resumeAudio } from "@/lib/ema";
 import { ImportError, importFile } from "@/lib/import";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
 type LibTab = "saved" | "collections" | "archive";
 type Sheet = null | "import" | "contents" | "sleep" | "more";
+type KindFilter = "hepsi" | ShelfKind;
+type ShelfFilter = "hepsi" | CatalogShelf | "ornek";
 
 const SLEEP = [
   { id: "off", label: "Kapalı" },
@@ -76,6 +86,10 @@ export function UnchainApp() {
   const [importNote, setImportNote] = useState<string | null>(null);
   const [openBook, setOpenBook] = useState<string | null>(null);
   const [collectionName, setCollectionName] = useState("");
+  const [openCollection, setOpenCollection] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<KindFilter>("hepsi");
+  const [shelf, setShelf] = useState<ShelfFilter>("hepsi");
   const [pronFrom, setPronFrom] = useState("");
   const [pronTo, setPronTo] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -87,8 +101,8 @@ export function UnchainApp() {
     const raw = localStorage.getItem("unchain.library.v1");
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as Library;
-        if (parsed.books?.length) setLib(parsed);
+        const parsed = JSON.parse(raw) as Partial<Library>;
+        if (parsed.books?.length) setLib(normalizeLibrary(parsed));
       } catch {
         /* tohum kitaplık kalır */
       }
@@ -147,11 +161,22 @@ export function UnchainApp() {
       const stuck = next.chapter === cursor.chapter && next.sentence === cursor.sentence;
       if (stuck || (sleep === "chapter" && next.chapter !== cursor.chapter)) {
         setPlaying(false);
-        if (!stuck) setLib((prev) => ({ ...prev, cursor: next }));
+        if (!stuck) {
+          setLib((prev) => ({
+            ...prev,
+            cursor: next,
+            books: prev.books.map((item) => (item.id === book.id ? { ...item, unread: false } : item))
+          }));
+        }
         return;
       }
       setWord(0);
-      setLib((prev) => ({ ...prev, cursor: next, currentId: book.id }));
+      setLib((prev) => ({
+        ...prev,
+        cursor: next,
+        currentId: book.id,
+        books: prev.books.map((item) => (item.id === book.id ? { ...item, unread: false } : item))
+      }));
     };
 
     const browser = () => {
@@ -218,6 +243,7 @@ export function UnchainApp() {
           heardEma.current = true;
           setEmaSeconds((performance.now() - started) / 1000);
         }
+        setLib((prev) => ({ ...prev, spokenSeconds: prev.spokenSeconds + clip.seconds }));
         handle.timer = window.setInterval(() => {
           const at = ctx.currentTime - origin;
           let index = 0;
@@ -249,14 +275,28 @@ export function UnchainApp() {
 
   const saved = lib.books.filter((b) => !b.archived);
   const archived = lib.books.filter((b) => b.archived);
-  const collections = useMemo(() => {
-    const names = new Set(lib.books.map((b) => b.collection).filter((n): n is string => Boolean(n)));
-    return [...names];
-  }, [lib.books]);
+  const collections = lib.collections;
 
   function patchBook(id: string, patch: Partial<Book>) {
     setLib((prev) => ({ ...prev, books: prev.books.map((b) => (b.id === id ? { ...b, ...patch } : b)) }));
   }
+
+  function openCatalog(work: CatalogWork) {
+    const existing = lib.books.find((item) => item.id === work.id);
+    if (existing) openReader(existing);
+    else addBook(bookFromCatalog(work));
+  }
+
+  const needle = query.trim().toLocaleLowerCase("tr");
+  function hit(item: Book) {
+    return !needle || bookHaystack(item).includes(needle);
+  }
+  const listed =
+    tab === "archive"
+      ? archived.filter(hit)
+      : tab === "collections"
+        ? saved.filter((item) => item.collection === openCollection).filter(hit)
+        : saved.filter((item) => kind === "hepsi" || shelfKind(item) === kind).filter(hit);
 
   function openReader(target: Book) {
     setImportNote(null);
@@ -366,8 +406,15 @@ export function UnchainApp() {
             <div className="head">
               <h1>Ana sayfa</h1>
             </div>
+            <input
+              className="field"
+              placeholder="Kitap veya cümle ara"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Ara"
+            />
             <p className="section-label">Dinlemeye devam</p>
-            {book && (
+            {book && hit(book) && (
               <button className="bookline" onClick={() => openReader(book)}>
                 <span className="cover" style={{ background: book.cover }} />
                 <span>
@@ -375,6 +422,7 @@ export function UnchainApp() {
                   <span className="meta">
                     {book.author}
                     <br />
+                    {chapterTitle ? `${chapterTitle} · ` : ""}
                     {Math.round(progress * 100)}% · {book.minutes} dk
                   </span>
                 </span>
@@ -395,7 +443,7 @@ export function UnchainApp() {
             <p className="note">PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Dosya sunucuya gitmez.</p>
             <p className="section-label">Rafta</p>
             <div className="cardgrid">
-              {saved.slice(0, 4).map((item) => (
+              {saved.filter(hit).slice(0, 4).map((item) => (
                 <button key={item.id} className="card" onClick={() => openReader(item)}>
                   <span className="cover" style={{ background: item.cover, display: "block", marginBottom: 12 }} />
                   <b>{item.title}</b>
@@ -409,24 +457,60 @@ export function UnchainApp() {
         {view === "explore" && (
           <>
             <h1>Keşfet</h1>
-            <div className="pills">
-              {["Hepsi", "Deneme", "Örnek"].map((name, i) => (
-                <button key={name} className={i === 0 ? "pill on" : "pill"}>
-                  {name}
+            <input
+              className="field"
+              placeholder="Açık raflarda ara"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Raflarda ara"
+            />
+            <div className="pills" style={{ marginTop: 12 }}>
+              {(
+                [
+                  ["hepsi", "Hepsi"],
+                  ["hikaye", "Hikâye"],
+                  ["siir", "Şiir"],
+                  ["ornek", "Örnek"]
+                ] as const
+              ).map(([id, label]) => (
+                <button key={id} className={shelf === id ? "pill on" : "pill"} onClick={() => setShelf(id)}>
+                  {label}
                 </button>
               ))}
             </div>
             <p className="section-label">Açık metinler</p>
             <p className="note">
-              Raf yalnız lisansı depoda yazılı metinleri taşır. Ticari kitap kapakları burada yok.
+              Raf yalnız lisansı depoda yazılı metinleri taşır. Ticari kitap kapakları burada yok. Puan yok.
             </p>
-            <button className="bookline" onClick={() => openReader(lib.books.find((b) => b.id === "sample-gece") ?? saved[0])}>
-              <span className="cover" style={{ background: "linear-gradient(160deg,#3d4c63,#8e7d9b)" }} />
-              <span>
-                <b>Gece okuması</b>
-                <span className="meta">Unchain · örnek · 2 dk</span>
-              </span>
-            </button>
+            {(shelf === "hepsi" || shelf === "ornek") && (!needle || "gece okuması unchain örnek".includes(needle)) && (
+              <button
+                className="bookline"
+                onClick={() => openReader(lib.books.find((item) => item.id === "sample-gece") ?? saved[0])}
+              >
+                <span className="cover" style={{ background: "linear-gradient(160deg,#3d4c63,#8e7d9b)" }} />
+                <span>
+                  <b>Gece okuması</b>
+                  <span className="meta">Unchain · örnek · Apache 2.0 · 2 dk</span>
+                </span>
+              </button>
+            )}
+            {CATALOG.filter((work) => shelf === "hepsi" || shelf === work.shelf)
+              .filter((work) => !needle || `${work.title} ${work.author} ${work.text}`.toLocaleLowerCase("tr").includes(needle))
+              .map((work) => {
+                const owned = lib.books.some((item) => item.id === work.id);
+                return (
+                  <button key={work.id} className="bookline" onClick={() => openCatalog(work)}>
+                    <span className="cover" style={{ background: work.shelf === "siir" ? "linear-gradient(160deg,#1f3d34,#7dcea0)" : "linear-gradient(160deg,#c4a46a,#6e4b2a)" }} />
+                    <span>
+                      <b>{work.title}</b>
+                      <span className="meta">
+                        {work.author} · {work.shelf === "siir" ? "şiir" : "hikâye"} · kamu malı
+                        {owned ? " · kitaplıkta" : ""}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
           </>
         )}
 
@@ -438,7 +522,14 @@ export function UnchainApp() {
                 +
               </button>
             </div>
-            <div className="pills">
+            <input
+              className="field"
+              placeholder="Kitaplıkta ara"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Kitaplıkta ara"
+            />
+            <div className="pills" style={{ marginTop: 12 }}>
               {(
                 [
                   ["saved", "Kayıtlı"],
@@ -446,21 +537,47 @@ export function UnchainApp() {
                   ["archive", "Arşiv"]
                 ] as const
               ).map(([id, label]) => (
-                <button key={id} className={tab === id ? "pill on" : "pill"} onClick={() => setTab(id)}>
+                <button
+                  key={id}
+                  className={tab === id ? "pill on" : "pill"}
+                  onClick={() => {
+                    setTab(id);
+                    setOpenCollection(null);
+                  }}
+                >
                   {label}
                 </button>
               ))}
             </div>
-            {tab === "collections" ? (
+            {tab === "saved" && (
+              <div className="pills" style={{ marginTop: 8 }}>
+                {(
+                  [
+                    ["hepsi", "Hepsi"],
+                    ["kitap", "Kitap"],
+                    ["ice", "İçe aktarılan"],
+                    ["link", "Bağlantı"],
+                    ["metin", "Metin"]
+                  ] as const
+                ).map(([id, label]) => (
+                  <button key={id} className={kind === id ? "pill on" : "pill"} onClick={() => setKind(id)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {tab === "collections" && !openCollection ? (
               <>
                 <form
                   className="head"
                   style={{ marginTop: 16 }}
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (!collectionName.trim() || !saved[0]) return;
-                    patchBook(saved[0].id, { collection: collectionName.trim() });
+                    const name = collectionName.trim();
+                    if (!name) return;
+                    setLib((prev) => addCollection(prev, name));
                     setCollectionName("");
+                    setOpenCollection(name);
                   }}
                 >
                   <input
@@ -468,17 +585,30 @@ export function UnchainApp() {
                     placeholder="Koleksiyon adı"
                     value={collectionName}
                     onChange={(e) => setCollectionName(e.target.value)}
+                    aria-label="Koleksiyon adı"
                   />
-                </form>
-                {collections.map((name) => (
-                  <button key={name} className="listbtn" onClick={() => setTab("saved")}>
-                    {name}
+                  <button className="btn solid" type="submit">
+                    Ekle
                   </button>
-                ))}
-                {collections.length === 0 && <p className="note">Henüz koleksiyon yok.</p>}
+                </form>
+                {collections
+                  .filter((name) => !needle || name.toLocaleLowerCase("tr").includes(needle))
+                  .map((name) => (
+                    <button key={name} className="listbtn" onClick={() => setOpenCollection(name)}>
+                      {name}
+                      <div className="meta">{saved.filter((item) => item.collection === name).length} kitap</div>
+                    </button>
+                  ))}
+                {collections.length === 0 && <p className="note">Henüz koleksiyon yok. Ad, hiçbir kitaba kendiliğinden yazılmaz.</p>}
               </>
             ) : (
-              (tab === "archive" ? archived : saved).map((item) => (
+              <>
+                {openCollection && (
+                  <button className="ghost" style={{ marginTop: 12 }} onClick={() => setOpenCollection(null)}>
+                    {openCollection}
+                  </button>
+                )}
+                {listed.map((item) => (
                 <div key={item.id}>
                   <button className="bookline" onClick={() => openReader(item)}>
                     <span className="cover" style={{ background: item.cover }} />
@@ -494,9 +624,17 @@ export function UnchainApp() {
                   </button>
                   {openBook === item.id && (
                     <div className="actions-inline">
-                      <button onClick={() => patchBook(item.id, { collection: item.collection ? null : "Sonra oku" })}>
-                        {item.collection ? "Koleksiyondan çıkar" : "Sonra oku"}
-                      </button>
+                      {lib.collections.map((name) => (
+                        <button
+                          key={name}
+                          onClick={() => setLib((prev) => assignCollection(prev, item.id, item.collection === name ? null : name))}
+                        >
+                          {item.collection === name ? `${name} çıkar` : name}
+                        </button>
+                      ))}
+                      {!lib.collections.includes("Sonra oku") && (
+                        <button onClick={() => setLib((prev) => assignCollection(prev, item.id, "Sonra oku"))}>Sonra oku</button>
+                      )}
                       <button onClick={() => patchBook(item.id, { unread: !item.unread })}>
                         {item.unread ? "Okundu işaretle" : "Okunmadı işaretle"}
                       </button>
@@ -509,7 +647,9 @@ export function UnchainApp() {
                     İşlemler
                   </button>
                 </div>
-              ))
+              ))}
+                {listed.length === 0 && <p className="note">Bu rafta kitap yok.</p>}
+              </>
             )}
           </>
         )}
@@ -574,10 +714,23 @@ export function UnchainApp() {
               value={lib.profileName}
               onChange={(e) => setLib((prev) => ({ ...prev, profileName: e.target.value }))}
             />
+            <p className="section-label">Kullanım</p>
+            <p className="note">Bu tarayıcıda Ema ile üretilen ses: {formatSpoken(lib.spokenSeconds)}. Tarayıcı önizlemesi bu süreye yazılmaz.</p>
+            <p className="section-label">Gizlilik</p>
+            <p className="note">
+              Kitaplık, ilerleme, profil adı ve üretilen süre bu tarayıcının yerel deposunda durur. Hesap yoktur. Dosya yükleme sunucuya gitmez. Bağlantı yapıştırınca sayfa metni sunucuda okunur ve tarayıcıya döner; Unchain bu metni saklamaz. Android ile web eşitlemesi yoktur.
+            </p>
+            <p className="section-label">Lisanslar</p>
+            <p className="note">Unchain — github.com/ayzekhdawy/unchain. Apache 2.0.</p>
+            {CATALOG.map((work) => (
+              <p key={work.id} className="note">
+                {work.title}, {work.author}. Kamu malı, 5846 m. 27, süre sonu {work.termEnd}. {work.sourceUrl}
+              </p>
+            ))}
+            <p className="note">EMA Lightning, Canberk Aslan, Apache 2.0. normalizer-tr, Erdem Tuna. ONNX Runtime Web, Microsoft, MIT.</p>
             <button className="listbtn" onClick={() => setView("voice")}>
-              Lisanslar ve ses
+              Ses
             </button>
-            <p className="note">Unchain — github.com/ayzekhdawy/unchain. EMA Lightning, Canberk Aslan, Apache 2.0. normalizer-tr, Erdem Tuna.</p>
             <button
               className="listbtn danger"
               onClick={() => {
@@ -895,9 +1048,20 @@ export function UnchainApp() {
             >
               Ses
             </button>
-            <button className="listbtn" onClick={() => patchBook(book.id, { collection: "Sonra oku" })}>
-              Koleksiyona ekle
-            </button>
+            {lib.collections.map((name) => (
+              <button
+                key={name}
+                className="listbtn"
+                onClick={() => setLib((prev) => assignCollection(prev, book.id, book.collection === name ? null : name))}
+              >
+                {book.collection === name ? `${name} koleksiyonundan çıkar` : `${name} koleksiyonuna ekle`}
+              </button>
+            ))}
+            {!lib.collections.includes("Sonra oku") && (
+              <button className="listbtn" onClick={() => setLib((prev) => assignCollection(prev, book.id, "Sonra oku"))}>
+                Sonra oku
+              </button>
+            )}
             <button
               className="listbtn danger"
               onClick={() => {

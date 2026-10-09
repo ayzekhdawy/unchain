@@ -10,7 +10,10 @@ dosyalarını tarayıcıda bölümlere ayırır; dosya sunucuya gitmez. Ses
 yaklaşık 34 MB, Apache 2.0. Web okuyucu bu sesi tarayıcıda, üç ONNX grafiğiyle
 üretir. Üretim olmazsa ekranda “Tarayıcı önizlemesi. Ema sesi değil.” yazar.
 Telefon uygulaması henüz kurulmaz ve Ema’yı taşımaz. Masaüstü arayüz
-`unchain.noniux.com` üzerinde, Vercel’de durur.
+`unchain.noniux.com` üzerinde, Vercel’de durur. Açık rafta üç kamu malı
+eser durur: Ömer Seyfettin’den Kır Sineği ve Yalnızlık, Orhan Veli’den
+Yaşamak. Örnek metin Gece okuması Unchain’e aittir. Lisanslar
+[docs/katalog.md](docs/katalog.md) içindedir.
 
 ## Vizyon
 
@@ -29,7 +32,7 @@ apps/web        Tanıtım ve masaüstü okuyucu (Next.js, Vercel)
 apps/android    Telefon uygulaması (Kotlin, Jetpack Compose) — kabuk sırada
 packages/doc    Kitap JSON şeması
 brand           İşaret ve Gece Okuma paleti
-docs            EMA ölçüm kapısı
+docs            EMA ölçüm kapısı ve kamu malı katalog
 tools           Ölçüm betiği
 ```
 

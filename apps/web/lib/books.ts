@@ -2,7 +2,8 @@ import type { TextBlock } from "./structure";
 
 export type Sentence = { id: string; text: string };
 export type Chapter = { id: string; title: string; sentences: Sentence[] };
-export type BookSource = "text" | "txt" | "md" | "pdf" | "epub" | "docx" | "link" | "scan" | "sample";
+export type BookSource = "text" | "txt" | "md" | "pdf" | "epub" | "docx" | "link" | "scan" | "sample" | "pd";
+export type ShelfKind = "kitap" | "ice" | "link" | "metin";
 
 export type Book = {
   id: string;
@@ -26,6 +27,8 @@ export type Library = {
   books: Book[];
   currentId: string | null;
   cursor: Cursor | null;
+  collections: string[];
+  spokenSeconds: number;
 };
 
 const COVERS = [
@@ -168,8 +171,74 @@ export function emptyLibrary(): Library {
     pronunciations: [{ from: "Unchain", to: "ançeyn" }],
     books: [{ ...SAMPLE, unread: false }],
     currentId: SAMPLE.id,
-    cursor: { bookId: SAMPLE.id, chapter: 0, sentence: 0, word: 0 }
+    cursor: { bookId: SAMPLE.id, chapter: 0, sentence: 0, word: 0 },
+    collections: [],
+    spokenSeconds: 0
   };
+}
+
+export function normalizeLibrary(raw: Partial<Library> | null | undefined): Library {
+  const base = emptyLibrary();
+  if (!raw || !Array.isArray(raw.books) || raw.books.length === 0) return base;
+  const names = new Set<string>();
+  if (Array.isArray(raw.collections)) {
+    for (const name of raw.collections) {
+      if (typeof name === "string" && name.trim()) names.add(name.trim());
+    }
+  }
+  for (const book of raw.books) {
+    if (book.collection) names.add(book.collection);
+  }
+  const speed = typeof raw.speed === "number" && raw.speed > 0 ? raw.speed : 1;
+  const spoken = typeof raw.spokenSeconds === "number" && raw.spokenSeconds >= 0 ? raw.spokenSeconds : 0;
+  return {
+    profileName: raw.profileName?.trim() || base.profileName,
+    speed,
+    pronunciations:
+      Array.isArray(raw.pronunciations) && raw.pronunciations.length ? raw.pronunciations : base.pronunciations,
+    books: raw.books,
+    currentId: raw.currentId ?? raw.books[0].id,
+    cursor: raw.cursor ?? { bookId: raw.books[0].id, chapter: 0, sentence: 0, word: 0 },
+    collections: [...names],
+    spokenSeconds: spoken
+  };
+}
+
+export function addCollection(lib: Library, name: string): Library {
+  const clean = name.trim();
+  if (!clean || lib.collections.includes(clean)) return lib;
+  return { ...lib, collections: [...lib.collections, clean] };
+}
+
+export function assignCollection(lib: Library, bookId: string, name: string | null): Library {
+  const clean = name?.trim() || null;
+  const collections = clean && !lib.collections.includes(clean) ? [...lib.collections, clean] : lib.collections;
+  return {
+    ...lib,
+    collections,
+    books: lib.books.map((book) => (book.id === bookId ? { ...book, collection: clean } : book))
+  };
+}
+
+export function shelfKind(book: Book): ShelfKind {
+  if (book.source === "pd" || book.source === "sample") return "kitap";
+  if (book.source === "link") return "link";
+  if (book.source === "text") return "metin";
+  return "ice";
+}
+
+export function bookHaystack(book: Book) {
+  return [book.title, book.author, book.collection ?? "", ...book.chapters.flatMap((chapter) => [chapter.title, ...chapter.sentences.map((sentence) => sentence.text)])]
+    .join(" ")
+    .toLocaleLowerCase("tr");
+}
+
+export function formatSpoken(seconds: number) {
+  const total = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  if (minutes <= 0) return `${rest} sn`;
+  return `${minutes} dk ${rest} sn`;
 }
 
 export function applySpeech(text: string, pairs: { from: string; to: string }[]) {
