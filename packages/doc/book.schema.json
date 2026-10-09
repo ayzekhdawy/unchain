@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ayzekhdawy/unchain/packages/doc/book.schema.json",
+  "title": "Unchain kitap",
+  "type": "object",
+  "required": ["id", "title", "author", "source", "chapters"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "author": { "type": "string" },
+    "source": {
+      "type": "string",
+      "enum": ["text", "txt", "md", "pdf", "epub", "docx", "link", "scan", "sample"]
+    },
+    "minutes": { "type": "integer", "minimum": 0 },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "sentences"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "sentences": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "text"],
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string" },
+                "text": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

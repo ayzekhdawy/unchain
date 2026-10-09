@@ -1,0 +1,55 @@
+{
+  "engine": "ema-lightning",
+  "device": "cpu",
+  "load_s": 0.92,
+  "short_text": "Merhaba. Bu ses yapay zekâ ile üretilmiştir.",
+  "short_generate_s": 0.371,
+  "warm_short_generate_s": 0.222,
+  "warm_short_audio_s": 2.72,
+  "short_audio_s": 2.72,
+  "short_words": [
+    {
+      "text": "merhaba.",
+      "start": 0.0,
+      "end": 0.68
+    },
+    {
+      "text": "bu",
+      "start": 0.68,
+      "end": 0.8
+    },
+    {
+      "text": "ses",
+      "start": 0.8,
+      "end": 1.04
+    },
+    {
+      "text": "yapay",
+      "start": 1.04,
+      "end": 1.36
+    },
+    {
+      "text": "zeka",
+      "start": 1.36,
+      "end": 1.72
+    },
+    {
+      "text": "ile",
+      "start": 1.72,
+      "end": 1.88
+    },
+    {
+      "text": "üretilmiştir.",
+      "start": 1.88,
+      "end": 2.72
+    }
+  ],
+  "long_chars": 217,
+  "long_generate_s": 1.78,
+  "long_audio_s": 14.89,
+  "rtf": 0.1195,
+  "realtime_factor_note": "rtf < 1 means generation is faster than playback",
+  "pass_first_audio_under_2s": true,
+  "pass_warm_audio_under_2s": true,
+  "pass_at_least_1x_realtime": true
+}

@@ -1,0 +1,13 @@
+Unchain
+Copyright 2026 İshak Hedevî
+
+This product includes EMA Lightning by Canberk Aslan, licensed under
+the Apache License, Version 2.0.
+https://huggingface.co/canberkkkkkk/ema-lightning
+https://github.com/canberk7/ema-lightning
+
+Turkish number, date and abbreviation reading follows normalizer-tr
+by Erdem Tuna, licensed under the Apache License, Version 2.0.
+https://github.com/erdemtuna/normalizer-tr
+
+Commercial redistributions must also keep ATTRIBUTION.md.
