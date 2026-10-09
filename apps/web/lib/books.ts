@@ -1,3 +1,5 @@
+import type { TextBlock } from "./structure";
+
 export type Sentence = { id: string; text: string };
 export type Chapter = { id: string; title: string; sentences: Sentence[] };
 export type BookSource = "text" | "txt" | "md" | "pdf" | "epub" | "docx" | "link" | "scan" | "sample";
@@ -44,12 +46,19 @@ export function minutesFor(text: string) {
   return Math.max(1, Math.round(text.replace(/\s+/g, " ").trim().length / 900));
 }
 
-export function bookFromText(title: string, author: string, raw: string, source: BookSource): Book {
-  const blocks = raw
-    .replace(/\r\n/g, "\n")
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+export function coverFromTitle(title: string): string {
+  let hash = 0;
+  for (const ch of title) hash = (hash * 33 + ch.charCodeAt(0)) >>> 0;
+  return COVERS[hash % COVERS.length];
+}
+
+export function bookFromBlocks(
+  title: string,
+  author: string,
+  blocks: TextBlock[],
+  source: BookSource,
+  cover?: string
+): Book {
   const chapters: Chapter[] = [];
   let current: Chapter = { id: nid("c"), title: "Başlangıç", sentences: [] };
 
@@ -59,35 +68,51 @@ export function bookFromText(title: string, author: string, raw: string, source:
   };
 
   for (const block of blocks) {
-    const heading = block.length < 80 && !/[.!?…]$/.test(block);
-    if (heading) {
+    const text = block.text.replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    if (block.kind === "heading") {
       if (current.sentences.length) chapters.push(current);
-      current = { id: nid("c"), title: block, sentences: [] };
+      current = { id: nid("c"), title: text, sentences: [] };
       continue;
     }
-    for (const part of block.split(/(?<=[.!?…])\s+/)) pushSentence(part);
+    for (const part of text.split(/(?<=[.!?…])\s+/)) pushSentence(part);
   }
   if (current.sentences.length) chapters.push(current);
   if (!chapters.length) {
+    const fallback = blocks.map((block) => block.text).join(" ").replace(/\s+/g, " ").trim() || "Boş metin.";
     chapters.push({
       id: nid("c"),
       title: "Metin",
-      sentences: [{ id: nid("s"), text: raw.trim() || "Boş metin." }]
+      sentences: [{ id: nid("s"), text: fallback }]
     });
   }
-  const flat = chapters.flatMap((c) => c.sentences.map((s) => s.text)).join(" ");
+  const flat = chapters.flatMap((chapter) => chapter.sentences.map((sentence) => sentence.text)).join(" ");
+  const safeTitle = title.trim() || "Adsız metin";
   return {
     id: nid("b"),
-    title: title.trim() || "Adsız metin",
+    title: safeTitle,
     author: author.trim() || "Sen",
     source,
     minutes: minutesFor(flat),
-    cover: COVERS[flat.length % COVERS.length],
+    cover: cover ?? coverFromTitle(safeTitle),
     archived: false,
     unread: true,
     collection: null,
     chapters
   };
+}
+
+export function bookFromText(title: string, author: string, raw: string, source: BookSource): Book {
+  const blocks: TextBlock[] = raw
+    .replace(/\r\n/g, "\n")
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((block) => ({
+      kind: block.length < 80 && !/[.!?…]$/.test(block) ? "heading" : "paragraph",
+      text: block.replace(/\s+/g, " ").trim()
+    }));
+  return bookFromBlocks(title, author, blocks, source);
 }
 
 export const SAMPLE: Book = {

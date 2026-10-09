@@ -4,10 +4,11 @@ Türkçe kitabı telefonda sese çevirir. Metin ve ses cihazdan çıkmaz.
 
 Site: [unchain.noniux.com](https://unchain.noniux.com)
 
-Unchain açık kaynak bir okuyucudur. PDF, EPUB, TXT ve DOCX gibi metinler
-bölümlere ayrılır, [EMA Lightning](https://huggingface.co/canberkkkkkk/ema-lightning)
-ile Türkçe okunur. Model tek seslidir, yaklaşık 34 MB’dir ve Apache 2.0’dır.
-Telefon uygulaması çevrimdışı çalışacak şekilde kurulur. Masaüstü arayüz
+Unchain açık kaynak bir okuyucudur. Web okuyucusu PDF, EPUB, DOCX, TXT ve MD
+dosyalarını tarayıcıda bölümlere ayırır; dosya sunucuya gitmez. Çalma şimdilik
+tarayıcının kendi sesidir ve ekranda böyle yazar. Hedef ses
+[EMA Lightning](https://huggingface.co/canberkkkkkk/ema-lightning): tek ses,
+yaklaşık 34 MB, Apache 2.0. Telefon uygulaması henüz kurulmaz. Masaüstü arayüz
 `unchain.noniux.com` üzerinde, Vercel’de durur.
 
 ## Vizyon

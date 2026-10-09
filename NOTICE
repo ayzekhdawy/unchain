@@ -10,4 +10,15 @@ Turkish number, date and abbreviation reading follows normalizer-tr
 by Erdem Tuna, licensed under the Apache License, Version 2.0.
 https://github.com/erdemtuna/normalizer-tr
 
+PDF text extraction uses Mozilla pdf.js, licensed under the
+Apache License, Version 2.0.
+https://github.com/mozilla/pdf.js
+
+DOCX conversion uses Mammoth by Michael Williamson, licensed under
+the BSD 2-Clause License.
+https://github.com/mwilliamson/mammoth.js
+
+EPUB packages are read with fflate, licensed under the MIT License.
+https://github.com/101arrowz/fflate
+
 Commercial redistributions must also keep ATTRIBUTION.md.

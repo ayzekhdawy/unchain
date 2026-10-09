@@ -13,6 +13,7 @@ import {
   type Cursor,
   type Library
 } from "@/lib/books";
+import { ImportError, importFile } from "@/lib/import";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
 type LibTab = "saved" | "collections" | "archive";
@@ -66,6 +67,9 @@ export function UnchainApp() {
   const [draft, setDraft] = useState("");
   const [link, setLink] = useState("https://");
   const [linkError, setLinkError] = useState("");
+  const [importError, setImportError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importNote, setImportNote] = useState<string | null>(null);
   const [openBook, setOpenBook] = useState<string | null>(null);
   const [collectionName, setCollectionName] = useState("");
   const [pronFrom, setPronFrom] = useState("");
@@ -87,7 +91,12 @@ export function UnchainApp() {
   }, []);
 
   useEffect(() => {
-    if (ready) localStorage.setItem("unchain.library.v1", JSON.stringify(lib));
+    if (!ready) return;
+    try {
+      localStorage.setItem("unchain.library.v1", JSON.stringify(lib));
+    } catch {
+      setImportNote("Kitaplık bu tarayıcıda dolu. Daha kısa bir dosya dene.");
+    }
   }, [lib, ready]);
 
   const book = lib.books.find((b) => b.id === (lib.cursor?.bookId ?? lib.currentId)) ?? null;
@@ -146,6 +155,7 @@ export function UnchainApp() {
   }
 
   function openReader(target: Book) {
+    setImportNote(null);
     setLib((prev) => ({
       ...prev,
       currentId: target.id,
@@ -169,7 +179,10 @@ export function UnchainApp() {
     seek(moveBySeconds(book, cursor, seconds, lib.speed));
   }
 
-  function addBook(next: Book) {
+  function addBook(next: Book, warning?: string | null) {
+    setPlaying(false);
+    setImportNote(warning ? warning : null);
+    setImportError("");
     setLib((prev) => ({
       ...prev,
       books: [next, ...prev.books],
@@ -182,14 +195,17 @@ export function UnchainApp() {
   }
 
   async function onFile(file: File) {
-    const name = file.name.toLowerCase();
-    if (!name.endsWith(".txt") && !name.endsWith(".md")) {
-      setLinkError("PDF, EPUB ve DOCX ayrıştırıcısı sıradaki dilimde. Şimdilik TXT veya MD.");
+    setImportError("");
+    setImporting(true);
+    try {
+      const result = await importFile(file, lib.profileName);
+      addBook(result.book, result.warning);
+    } catch (err) {
+      setImportError(err instanceof ImportError ? err.message : "Dosya açılamadı.");
       setSheet("import");
-      return;
+    } finally {
+      setImporting(false);
     }
-    const text = await file.text();
-    addBook(bookFromText(file.name.replace(/\.(txt|md)$/i, ""), "Sen", text, name.endsWith(".md") ? "md" : "txt"));
   }
 
   async function submitLink() {
@@ -263,10 +279,11 @@ export function UnchainApp() {
               <button className="chip" onClick={() => setView("link")}>
                 Bağlantı yapıştır
               </button>
-              <button className="chip" onClick={() => fileRef.current?.click()}>
-                Dosya yükle
+              <button className="chip" disabled={importing} onClick={() => fileRef.current?.click()}>
+                {importing ? "Ayrıştırılıyor…" : "Dosya yükle"}
               </button>
             </div>
+            <p className="note">PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Dosya sunucuya gitmez.</p>
             <p className="section-label">Rafta</p>
             <div className="cardgrid">
               {saved.slice(0, 4).map((item) => (
@@ -522,6 +539,7 @@ export function UnchainApp() {
               </button>
             </div>
             <p className="note">Tarayıcı önizlemesi. Ema sesi değil. Bu ürünün sesi yapay zekâ ile üretilecektir.</p>
+            {importNote && <p className="note">{importNote}</p>}
             <article>
               {book.chapters.map((chapter, ci) => (
                 <section key={chapter.id}>
@@ -637,7 +655,7 @@ export function UnchainApp() {
       <input
         ref={fileRef}
         type="file"
-        accept=".txt,.md,text/plain"
+        accept=".pdf,.epub,.docx,.txt,.md,application/pdf,application/epub+zip,text/plain"
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -665,7 +683,9 @@ export function UnchainApp() {
               >
                 Bağlantı yapıştır
               </button>
-              <button onClick={() => fileRef.current?.click()}>Dosya yükle</button>
+              <button disabled={importing} onClick={() => fileRef.current?.click()}>
+                {importing ? "Ayrıştırılıyor…" : "Dosya yükle"}
+              </button>
               <button disabled title="Sıradaki dilim">
                 Metin tara
               </button>
@@ -688,7 +708,8 @@ export function UnchainApp() {
               Web sayfası aç
               <div className="meta">Haber, blog, herkese açık sayfa</div>
             </button>
-            {linkError && <p className="note">{linkError}</p>}
+            <p className="note">PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Dosya sunucuya gitmez.</p>
+            {importError && <p className="note">{importError}</p>}
           </div>
         </div>
       )}

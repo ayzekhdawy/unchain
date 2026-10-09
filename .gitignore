@@ -10,3 +10,4 @@ __pycache__/
 apps/android/.gradle/
 apps/android/**/build/
 local.properties
+apps/web/public/pdf.worker.min.mjs

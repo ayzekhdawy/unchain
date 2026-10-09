@@ -2,12 +2,16 @@
   "name": "@unchain/web",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev": "node scripts/copy-pdf-worker.mjs && next dev",
+    "build": "node scripts/copy-pdf-worker.mjs && next build",
+    "start": "next start",
+    "check:import": "tsx scripts/check-import.ts"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
+    "mammoth": "^1.13.0",
     "next": "^15.5.4",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
@@ -15,6 +19,7 @@
     "@types/node": "^24.5.2",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.2"
   }
 }
