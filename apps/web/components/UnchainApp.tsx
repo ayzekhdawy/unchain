@@ -74,12 +74,28 @@ const SLEEP = [
   { id: "5", label: "5 dakika" }
 ];
 
-const NAV: { id: View; label: string }[] = [
+const NAV: { id: "home" | "explore" | "library" | "voice"; label: string }[] = [
   { id: "home", label: "Ana sayfa" },
   { id: "explore", label: "Keşfet" },
   { id: "library", label: "Kitaplık" },
   { id: "voice", label: "Ses" }
 ];
+
+function Glyph({ name }: { name: "home" | "explore" | "library" | "voice" | "account" | "import" }) {
+  const d = {
+    home: "M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z",
+    explore: "M12 21a9 9 0 1 0-9-9 9 9 0 0 0 9 9z M14.2 9.2 12 12.2 11 16l3.6-.8 2.4-2.6",
+    library: "M5 4.5h5.2v15H5z M13.8 4.5H19v15h-5.2z",
+    voice: "M9 9.2a3 3 0 0 1 6 0V13a3 3 0 0 1-6 0z M7 12.5a5 5 0 0 0 10 0 M12 17.5V20",
+    account: "M12 12.2a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8z M5.5 19.5a6.5 6.5 0 0 1 13 0",
+    import: "M12 4.5v9 M8.2 10.2 12 14l3.8-3.8 M5.5 19.5h13"
+  }[name];
+  return (
+    <svg className="nav-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d={d} pathLength="1" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function Mark({ size = 28 }: { size?: number }) {
   return (
@@ -101,6 +117,10 @@ export function UnchainApp() {
   const [lib, setLib] = useState<Library>(emptyLibrary);
   const [ready, setReady] = useState(false);
   const [view, setView] = useState<View>("home");
+  useEffect(() => {
+    document.querySelector(".stage")?.scrollTo(0, 0);
+    window.scrollTo(0, 0);
+  }, [view]);
   const [tab, setTab] = useState<LibTab>("saved");
   const [sheet, setSheet] = useState<Sheet>(null);
   const [playing, setPlaying] = useState(false);
@@ -586,16 +606,22 @@ export function UnchainApp() {
         </div>
         {NAV.map((item) => (
           <button key={item.id} className={view === item.id ? "on" : ""} onClick={() => setView(item.id)}>
+            <Glyph name={item.id} />
             {item.label}
           </button>
         ))}
-        <button onClick={() => setSheet("import")}>İçe aktar</button>
+        <button onClick={() => setSheet("import")}>
+          <Glyph name="import" />
+          İçe aktar
+        </button>
         <button className={view === "account" ? "on" : ""} onClick={() => setView("account")}>
+          <Glyph name="account" />
           Profil
         </button>
       </nav>
 
       <main className="stage">
+        <div className="stage-view" key={view}>
         {view === "home" && (
           <>
             <div className="head">
@@ -1201,6 +1227,7 @@ export function UnchainApp() {
             </div>
           </div>
         )}
+        </div>
       </main>
 
       <aside className="now">
@@ -1250,6 +1277,7 @@ export function UnchainApp() {
       <nav className="tabs" aria-label="Alt gezinti">
         {NAV.slice(0, 2).map((item) => (
           <button key={item.id} className={view === item.id ? "on" : ""} onClick={() => setView(item.id)}>
+            <Glyph name={item.id} />
             {item.label}
           </button>
         ))}
@@ -1258,6 +1286,7 @@ export function UnchainApp() {
         </button>
         {NAV.slice(2).map((item) => (
           <button key={item.id} className={view === item.id ? "on" : ""} onClick={() => setView(item.id)}>
+            <Glyph name={item.id} />
             {item.label}
           </button>
         ))}
