@@ -20,8 +20,19 @@ import {
   type Library,
   type ShelfKind
 } from "@/lib/books";
+import {
+  deleteLibrary,
+  fetchLibrary,
+  fetchSession,
+  logout,
+  putLibrary,
+  requestLink,
+  speakCached,
+  uploadOriginal
+} from "@/lib/bulut";
 import { bookFromCatalog, CATALOG, type CatalogShelf, type CatalogWork } from "@/lib/catalog";
 import { emaSpeak, loadEma, resampleLinear, resumeAudio } from "@/lib/ema";
+import { FILE_MAX } from "@/lib/hesap";
 import { ImportError, importFile } from "@/lib/import";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
@@ -92,32 +103,68 @@ export function UnchainApp() {
   const [shelf, setShelf] = useState<ShelfFilter>("hepsi");
   const [pronFrom, setPronFrom] = useState("");
   const [pronTo, setPronTo] = useState("");
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [girisNote, setGirisNote] = useState("");
+  const [pending, setPending] = useState<{ book: Book; warning?: string | null; file?: File } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const sleepUntil = useRef<number | null>(null);
   const emaOk = useRef(true);
   const heardEma = useRef(false);
+  const hydrated = useRef(false);
+  const cloudGen = useRef(0);
 
   useEffect(() => {
+    let gone = false;
     const raw = localStorage.getItem("unchain.library.v1");
+    let local = emptyLibrary();
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as Partial<Library>;
-        if (parsed.books?.length) setLib(normalizeLibrary(parsed));
+        if (parsed.books?.length) local = normalizeLibrary(parsed);
       } catch {
         /* tohum kitaplık kalır */
       }
     }
-    setReady(true);
+    setLib(local);
+    if (new URLSearchParams(window.location.search).get("giris") === "gecersiz") {
+      setGirisNote("Bağlantı geçersiz veya kullanılmış.");
+      setView("account");
+      window.history.replaceState(null, "", "/uygulama");
+    }
+    void (async () => {
+      const session = await fetchSession().catch(() => ({ giris: false, email: null }));
+      if (gone) return;
+      if (session.giris && session.email) {
+        setSessionEmail(session.email);
+        const remote = await fetchLibrary().catch(() => null);
+        if (gone) return;
+        if (remote) setLib(remote);
+        else void putLibrary(local);
+      }
+      hydrated.current = true;
+      setReady(true);
+    })();
+    return () => {
+      gone = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !hydrated.current) return;
     try {
       localStorage.setItem("unchain.library.v1", JSON.stringify(lib));
     } catch {
       setImportNote("Kitaplık bu tarayıcıda dolu. Daha kısa bir dosya dene.");
     }
-  }, [lib, ready]);
+    if (!sessionEmail) return;
+    const gen = cloudGen.current;
+    const timer = window.setTimeout(() => {
+      if (cloudGen.current !== gen) return;
+      void putLibrary(lib);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [lib, ready, sessionEmail]);
 
   const book = lib.books.find((b) => b.id === (lib.cursor?.bookId ?? lib.currentId)) ?? null;
   const cursor = lib.cursor;
@@ -216,7 +263,7 @@ export function UnchainApp() {
           const nextText = applySpeech(sentenceAt(book, upcoming).sentence.text, lib.pronunciations);
           void emaSpeak(nextText, lib.speed, 0).catch(() => undefined);
         }
-        const clip = await emaSpeak(prepared, lib.speed, 0);
+        const clip = await speakCached(prepared, lib.speed, Boolean(sessionEmail));
         if (handle.cancelled) return;
         const ctx = resumeAudio();
         if (!ctx) throw new Error("ses yok");
@@ -239,11 +286,13 @@ export function UnchainApp() {
         source.start();
         setVoice("ready");
         setVoiceError("");
-        if (!heardEma.current) {
-          heardEma.current = true;
-          setEmaSeconds((performance.now() - started) / 1000);
+        if (!clip.fromCache) {
+          if (!heardEma.current) {
+            heardEma.current = true;
+            setEmaSeconds((performance.now() - started) / 1000);
+          }
+          setLib((prev) => ({ ...prev, spokenSeconds: prev.spokenSeconds + clip.seconds }));
         }
-        setLib((prev) => ({ ...prev, spokenSeconds: prev.spokenSeconds + clip.seconds }));
         handle.timer = window.setInterval(() => {
           const at = ctx.currentTime - origin;
           let index = 0;
@@ -271,7 +320,7 @@ export function UnchainApp() {
       }
       window.speechSynthesis.cancel();
     };
-  }, [playing, book, cursor, lib.speed, lib.pronunciations, sleep]);
+  }, [playing, book, cursor, lib.speed, lib.pronunciations, sleep, sessionEmail]);
 
   const saved = lib.books.filter((b) => !b.archived);
   const archived = lib.books.filter((b) => b.archived);
@@ -284,7 +333,7 @@ export function UnchainApp() {
   function openCatalog(work: CatalogWork) {
     const existing = lib.books.find((item) => item.id === work.id);
     if (existing) openReader(existing);
-    else addBook(bookFromCatalog(work));
+    else stageBook(bookFromCatalog(work));
   }
 
   const needle = query.trim().toLocaleLowerCase("tr");
@@ -343,12 +392,41 @@ export function UnchainApp() {
     setDraft("");
   }
 
+  function stageBook(next: Book, warning?: string | null, file?: File) {
+    if (sessionEmail) {
+      setSheet(null);
+      setPending({ book: next, warning, file });
+      return;
+    }
+    addBook(next, warning);
+  }
+
+  async function confirmPending() {
+    if (!pending) return;
+    const item = pending;
+    setPending(null);
+    if (item.file) {
+      const err = await uploadOriginal(item.book.id, item.file);
+      if (err) {
+        setImportError(err);
+        setSheet("import");
+        return;
+      }
+    }
+    addBook(item.book, item.warning);
+  }
+
   async function onFile(file: File) {
     setImportError("");
+    if (sessionEmail && file.size > FILE_MAX) {
+      setImportError("4 MB üstü dosya bu web kopyasına sığmaz.");
+      setSheet("import");
+      return;
+    }
     setImporting(true);
     try {
       const result = await importFile(file, lib.profileName);
-      addBook(result.book, result.warning);
+      stageBook(result.book, result.warning, sessionEmail ? file : undefined);
     } catch (err) {
       setImportError(err instanceof ImportError ? err.message : "Dosya açılamadı.");
       setSheet("import");
@@ -369,7 +447,7 @@ export function UnchainApp() {
       setLinkError(data.error ?? "Bağlantı açılmadı.");
       return;
     }
-    addBook(bookFromText(data.title ?? "Bağlantı", new URL(link).hostname, data.text, "link"));
+    stageBook(bookFromText(data.title ?? "Bağlantı", new URL(link).hostname, data.text, "link"));
   }
 
   function chooseSleep(id: string) {
@@ -440,7 +518,11 @@ export function UnchainApp() {
                 {importing ? "Ayrıştırılıyor…" : "Dosya yükle"}
               </button>
             </div>
-            <p className="note">PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Dosya sunucuya gitmez.</p>
+            <p className="note">
+              {sessionEmail
+                ? "PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Kaydetmeden önce kopyanın Vercel’de duracağı söylenir."
+                : "PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Dosya sunucuya gitmez."}
+            </p>
             <p className="section-label">Rafta</p>
             <div className="cardgrid">
               {saved.filter(hit).slice(0, 4).map((item) => (
@@ -675,7 +757,11 @@ export function UnchainApp() {
                 value={lib.speed}
                 onChange={(e) => setLib((prev) => ({ ...prev, speed: Number(e.target.value) }))}
               />
-              <p className="note">Ema bu tarayıcıda üretilir. Metin cihazdan çıkmaz. Üretim olmazsa okuyucu tarayıcı önizlemesi yazar.</p>
+              <p className="note">
+                Ema bu tarayıcıda üretilir.{" "}
+                {sessionEmail ? "Giriş yaptığın kitaplığın kopyası Vercel’de durur." : "Giriş yokken metin cihazdan çıkmaz."} Üretim
+                olmazsa okuyucu tarayıcı önizlemesi yazar.
+              </p>
             </article>
             <p className="section-label">Söyleyiş sözlüğü</p>
             <form
@@ -708,17 +794,65 @@ export function UnchainApp() {
         {view === "account" && (
           <>
             <h1>Profil</h1>
-            <p className="note">Bu ad yalnız bu tarayıcıda durur. Telefon uygulamasında profil aygıtta kalır.</p>
+            {sessionEmail ? (
+              <>
+                <p className="note">{sessionEmail}</p>
+                <button
+                  className="listbtn"
+                  onClick={() => {
+                    void logout().then(() => {
+                      setSessionEmail(null);
+                      setGirisNote("Çıkış sunucudaki kopyayı silmez.");
+                    });
+                  }}
+                >
+                  Çıkış
+                </button>
+                <p className="note">Çıkış sunucudaki kopyayı silmez.</p>
+              </>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void requestLink(emailDraft).then((result) => setGirisNote(result.mesaj));
+                }}
+              >
+                <p className="note">Giriş yapınca kitaplık Vercel’de durur.</p>
+                <input
+                  className="field"
+                  type="email"
+                  placeholder="E-posta"
+                  value={emailDraft}
+                  onChange={(e) => setEmailDraft(e.target.value)}
+                  aria-label="E-posta"
+                />
+                <button className="btn solid" type="submit" style={{ marginTop: 12 }}>
+                  Bağlantı gönder
+                </button>
+              </form>
+            )}
+            {girisNote && <p className="note">{girisNote}</p>}
+            <p className="note">
+              {sessionEmail
+                ? "Bu ad giriş yaptığın kitaplıkla birlikte Vercel’de durur."
+                : "Bu ad yalnız bu tarayıcıda durur. Telefon uygulamasında profil aygıtta kalır."}
+            </p>
             <input
               className="field"
               value={lib.profileName}
               onChange={(e) => setLib((prev) => ({ ...prev, profileName: e.target.value }))}
             />
             <p className="section-label">Kullanım</p>
-            <p className="note">Bu tarayıcıda Ema ile üretilen ses: {formatSpoken(lib.spokenSeconds)}. Tarayıcı önizlemesi bu süreye yazılmaz.</p>
+            <p className="note">
+              {sessionEmail
+                ? `Ema ile üretilen ses: ${formatSpoken(lib.spokenSeconds)}. Önbellekten gelen parça ve tarayıcı önizlemesi bu süreye yazılmaz.`
+                : `Bu tarayıcıda Ema ile üretilen ses: ${formatSpoken(lib.spokenSeconds)}. Tarayıcı önizlemesi bu süreye yazılmaz.`}
+            </p>
             <p className="section-label">Gizlilik</p>
             <p className="note">
-              Kitaplık, ilerleme, profil adı ve üretilen süre bu tarayıcının yerel deposunda durur. Hesap yoktur. Dosya yükleme sunucuya gitmez. Bağlantı yapıştırınca sayfa metni sunucuda okunur ve tarayıcıya döner; Unchain bu metni saklamaz. Android ile web eşitlemesi yoktur.
+              {sessionEmail
+                ? "Giriş yaptığın kitaplık, ilerleme ve yüklediğin dosya Vercel’de durur. Ses tarayıcıda üretilir; üretilen parça özel depoda saklanır ki ikinci dinleyiş yeniden üretmesin. Çıkış sunucudaki kopyayı silmez. Android ile web eşitlemesi yoktur."
+                : "Kitaplık, ilerleme, profil adı ve üretilen süre bu tarayıcının yerel deposunda durur. Dosya yükleme sunucuya gitmez. Bağlantı yapıştırınca sayfa metni sunucuda okunur ve tarayıcıya döner; Unchain bu metni saklamaz. Giriş yapınca kitaplık Vercel’de durur. Android ile web eşitlemesi yoktur."}
             </p>
             <p className="section-label">Lisanslar</p>
             <p className="note">Unchain — github.com/ayzekhdawy/unchain. Apache 2.0.</p>
@@ -734,9 +868,19 @@ export function UnchainApp() {
             <button
               className="listbtn danger"
               onClick={() => {
-                localStorage.removeItem("unchain.library.v1");
-                setLib(emptyLibrary());
-                setPlaying(false);
+                void (async () => {
+                  if (sessionEmail) {
+                    cloudGen.current += 1;
+                    const ok = await deleteLibrary();
+                    if (!ok) {
+                      setGirisNote("Vercel kopyası silinemedi.");
+                      return;
+                    }
+                  }
+                  localStorage.removeItem("unchain.library.v1");
+                  setLib(emptyLibrary());
+                  setPlaying(false);
+                })();
               }}
             >
               Veriyi sil
@@ -755,7 +899,7 @@ export function UnchainApp() {
                 className="btn solid"
                 style={{ marginLeft: "auto" }}
                 disabled={!draft.trim()}
-                onClick={() => addBook(bookFromText(draft.split("\n")[0].slice(0, 80), lib.profileName, draft, "text"))}
+                onClick={() => stageBook(bookFromText(draft.split("\n")[0].slice(0, 80), lib.profileName, draft, "text"))}
               >
                 Dinle
               </button>
@@ -782,7 +926,11 @@ export function UnchainApp() {
               İleri
             </button>
             {linkError && <p className="note">{linkError}</p>}
-            <p className="note">Sayfa metni bu site üzerinden okunur. İç ağ adresleri kabul edilmez.</p>
+            <p className="note">
+              {sessionEmail
+                ? "Sayfa metni bu site üzerinden okunur. Kaydedince bu kopya Vercel’de durur. İç ağ adresleri kabul edilmez."
+                : "Sayfa metni bu site üzerinden okunur. Metin saklanmaz. İç ağ adresleri kabul edilmez."}
+            </p>
           </>
         )}
 
@@ -804,9 +952,13 @@ export function UnchainApp() {
               {voice === "fallback"
                 ? "Tarayıcı önizlemesi. Ema sesi değil. Bu ürünün sesi yapay zekâ ile üretilecektir."
                 : voice === "generating"
-                  ? "Ema üretiyor. Metin bu tarayıcıda kalır."
+                  ? sessionEmail
+                    ? "Ema üretiyor. Ses bu tarayıcıda üretilir."
+                    : "Ema üretiyor. Metin bu tarayıcıda kalır."
                   : voice === "loading"
-                    ? "Ema yükleniyor. Metin bu tarayıcıda kalır."
+                    ? sessionEmail
+                      ? "Ema yükleniyor. Ses bu tarayıcıda üretilir."
+                      : "Ema yükleniyor. Metin bu tarayıcıda kalır."
                     : `Ema. Bu ses yapay zekâ ile üretilmiştir.${emaSeconds !== null ? ` İlk cümle ${emaSeconds.toFixed(1)} saniyede üretildi.` : ""}`}
             </p>
             {importNote && <p className="note">{importNote}</p>}
@@ -883,7 +1035,11 @@ export function UnchainApp() {
             <button className="btn solid" onClick={() => (view === "reader" ? togglePlay() : openReader(book))}>
               {playing ? "Durdur" : "Dinle"}
             </button>
-            <p className="note">Masaüstünde okuyucu bu kolonun yanında açılır. Kitaplık verisi bu tarayıcıda tutulur.</p>
+            <p className="note">
+              {sessionEmail
+                ? "Masaüstünde okuyucu bu kolonun yanında açılır. Giriş yaptığın kitaplık Vercel’de durur."
+                : "Masaüstünde okuyucu bu kolonun yanında açılır. Kitaplık verisi bu tarayıcıda tutulur."}
+            </p>
           </>
         ) : (
           <p className="note">Kitaplık boş.</p>
@@ -921,6 +1077,23 @@ export function UnchainApp() {
           </button>
         ))}
       </nav>
+
+      {pending && (
+        <div className="sheet">
+          <div className="panel" onClick={(e) => e.stopPropagation()}>
+            <b>Bu kopya Vercel’de durur.</b>
+            <p className="note">
+              {pending.book.title} giriş yaptığın hesapta saklanır. Yüklemeden önce bu söylenir. Telefon uygulaması bu kopyayı kullanmaz.
+            </p>
+            <button className="btn solid" onClick={() => void confirmPending()}>
+              Kaydet
+            </button>
+            <button className="ghost" style={{ marginLeft: 8 }} onClick={() => setPending(null)}>
+              Vazgeç
+            </button>
+          </div>
+        </div>
+      )}
 
       <input
         ref={fileRef}
@@ -978,7 +1151,11 @@ export function UnchainApp() {
               Web sayfası aç
               <div className="meta">Haber, blog, herkese açık sayfa</div>
             </button>
-            <p className="note">PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Dosya sunucuya gitmez.</p>
+            <p className="note">
+              {sessionEmail
+                ? "PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Kaydetmeden önce kopyanın Vercel’de duracağı söylenir."
+                : "PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Dosya sunucuya gitmez."}
+            </p>
             {importError && <p className="note">{importError}</p>}
           </div>
         </div>

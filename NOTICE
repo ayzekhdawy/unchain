@@ -25,4 +25,10 @@ The voice graph runs with ONNX Runtime Web, licensed under the MIT License.
 Copyright (c) Microsoft Corporation.
 https://github.com/microsoft/onnxruntime
 
+Signed-in library rows use @neondatabase/serverless, MIT License.
+https://github.com/neondatabase/serverless
+
+Private files and cached audio use @vercel/blob, Apache License, Version 2.0.
+https://github.com/vercel/storage
+
 Commercial redistributions must also keep ATTRIBUTION.md.

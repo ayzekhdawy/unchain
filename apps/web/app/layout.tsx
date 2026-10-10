@@ -14,7 +14,7 @@ const serif = Source_Serif_4({
 
 export const metadata: Metadata = {
   title: "Unchain",
-  description: "Türkçe kitabı telefonda sese çevirir. Metin ve ses cihazdan çıkmaz.",
+  description: "Türkçe kitabı telefonda sese çevirir. Telefonda metin cihazdan çıkmaz. Web’de giriş yapınca kitaplık Vercel’de durur.",
   metadataBase: new URL("https://unchain.noniux.com")
 };
 

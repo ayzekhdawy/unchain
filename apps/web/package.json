@@ -7,9 +7,12 @@
     "start": "next start",
     "check:import": "tsx scripts/check-import.ts",
     "check:ema": "tsx scripts/check-ema.ts",
-    "check:catalog": "tsx scripts/check-catalog.ts"
+    "check:catalog": "tsx scripts/check-catalog.ts",
+    "check:hesap": "tsx scripts/check-hesap.ts"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "@vercel/blob": "^2.8.1",
     "fflate": "^0.8.3",
     "mammoth": "^1.13.0",
     "next": "^15.5.4",

@@ -33,8 +33,8 @@ export default function HomePage() {
           <p className="kicker">Açık kaynak okuyucu</p>
           <h1>Türkçe kitabı telefonda sese çevirir.</h1>
           <p className="lede">
-            Metin ve ses cihazdan çıkmaz. PDF, EPUB ve düz yazı bölümlere ayrılır, tek bir açık sesle okunur.
-            Masaüstünde aynı kitaplık genişler.
+            Telefonda metin ve ses cihazdan çıkmaz. PDF, EPUB ve düz yazı bölümlere ayrılır, tek bir açık sesle okunur.
+            Web’de giriş yapınca kitaplığın bir kopyası Vercel’de durur; yüklemeden önce bu söylenir.
           </p>
           <div className="actions">
             <Link className="btn solid" href="/uygulama">
@@ -47,7 +47,7 @@ export default function HomePage() {
           <div className="facts">
             <div>
               <strong>Telefonda kalır</strong>
-              <span>APK inince kitap, ilerleme ve ses aygıttadır. Hesap sunucusu yok.</span>
+              <span>APK inince kitap, ilerleme ve ses aygıttadır. Telefonun hesap sunucusu yoktur.</span>
             </div>
             <div>
               <strong>Ema, tek ses</strong>

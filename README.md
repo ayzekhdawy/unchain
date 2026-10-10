@@ -1,11 +1,13 @@
 # Unchain
 
-Türkçe kitabı telefonda sese çevirir. Metin ve ses cihazdan çıkmaz.
+Türkçe kitabı telefonda sese çevirir. Telefonda metin ve ses cihazdan çıkmaz.
 
 Site: [unchain.noniux.com](https://unchain.noniux.com)
 
 Unchain açık kaynak bir okuyucudur. Web okuyucusu PDF, EPUB, DOCX, TXT ve MD
-dosyalarını tarayıcıda bölümlere ayırır; dosya sunucuya gitmez. Ses
+dosyalarını tarayıcıda bölümlere ayırır. Giriş yokken dosya sunucuya gitmez.
+Web’de giriş yapınca kitaplığın bir kopyası Vercel’de durur; yüklemeden önce
+bu söylenir. Ses
 [EMA Lightning](https://huggingface.co/canberkkkkkk/ema-lightning): tek ses,
 yaklaşık 34 MB, Apache 2.0. Web okuyucu bu sesi tarayıcıda, üç ONNX grafiğiyle
 üretir. Üretim olmazsa ekranda “Tarayıcı önizlemesi. Ema sesi değil.” yazar.
