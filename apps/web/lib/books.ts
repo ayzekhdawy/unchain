@@ -1,4 +1,5 @@
 import type { TextBlock } from "./structure";
+import { cleanBookmarks, type Bookmark } from "./yer-imi";
 
 export type Sentence = { id: string; text: string };
 export type Chapter = { id: string; title: string; sentences: Sentence[] };
@@ -34,6 +35,7 @@ export type Library = {
   theme: ReadingTheme;
   ambient: AmbientName;
   ambientLevel: number;
+  bookmarks: Bookmark[];
 };
 
 const COVERS = [
@@ -181,7 +183,8 @@ export function emptyLibrary(): Library {
     spokenSeconds: 0,
     theme: "gece",
     ambient: "yok",
-    ambientLevel: 0.45
+    ambientLevel: 0.45,
+    bookmarks: []
   };
 }
 
@@ -213,7 +216,8 @@ export function normalizeLibrary(raw: Partial<Library> | null | undefined): Libr
     spokenSeconds: spoken,
     theme: raw.theme === "kagit" ? "kagit" : "gece",
     ambient,
-    ambientLevel: level
+    ambientLevel: level,
+    bookmarks: cleanBookmarks(raw.bookmarks, raw.books)
   };
 }
 

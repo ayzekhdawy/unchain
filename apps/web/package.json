@@ -13,7 +13,8 @@
     "check:tara": "tsx scripts/check-tara.ts",
     "check:seek": "tsx scripts/check-seek.ts",
     "check:kaydir": "tsx scripts/check-kaydir.ts",
-    "check:pdf-sayfa": "tsx scripts/check-pdf-sayfa.ts"
+    "check:pdf-sayfa": "tsx scripts/check-pdf-sayfa.ts",
+    "check:yer-imi": "tsx scripts/check-yer-imi.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

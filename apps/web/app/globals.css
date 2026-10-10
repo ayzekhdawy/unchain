@@ -172,6 +172,7 @@ textarea { min-height: 220px; resize: vertical; }
 .controls { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .controls .play { width: 64px; height: 64px; border-radius: 50%; border: 0; background: var(--play); color: #141518; font-size: 22px; }
 .ghost { border: 0; background: var(--raise); border-radius: 999px; padding: 8px 12px; min-height: 48px; }
+.ghost.on { background: var(--signal); color: #16140f; }
 .note { color: var(--mute); font-size: 13px; }
 .listbtn { width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--line); padding: 12px 0; min-height: 48px; }
 .sr {
@@ -219,6 +220,7 @@ html[data-theme="kagit"] {
   color-scheme: light;
 }
 html[data-theme="kagit"] .swipe-actions button.collect { color: #f4f1ea; }
+html[data-theme="kagit"] .ghost.on { color: #f4f1ea; }
 html[data-theme="kagit"] .btn.solid,
 html[data-theme="kagit"] .pill.on,
 html[data-theme="kagit"] .controls .play,

@@ -40,6 +40,7 @@ import { setAmbient, stopAmbient } from "@/lib/ortam";
 import { pdfScanTitle } from "@/lib/pdf-sayfa";
 import { bookFromScan, readPdfScan, readScan } from "@/lib/tara";
 import { SWIPE_WIDTH, swipeAxis, swipeOffset, swipeSettlesOpen } from "@/lib/kaydir";
+import { bookmarkAt, bookmarksFor, dropBookBookmarks, toggleBookmark, type Bookmark } from "@/lib/yer-imi";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
 type LibTab = "saved" | "collections" | "archive";
@@ -191,6 +192,9 @@ export function UnchainApp() {
 
   const book = lib.books.find((b) => b.id === (lib.cursor?.bookId ?? lib.currentId)) ?? null;
   const cursor = lib.cursor;
+  const here: Cursor | null = cursor ? { ...cursor, word } : null;
+  const marked: Bookmark | null = bookmarkAt(lib.bookmarks, here);
+  const bookMarks = book ? bookmarksFor(lib.bookmarks, book.id) : [];
 
   useEffect(() => {
     if (view !== "reader") return;
@@ -1097,6 +1101,17 @@ export function UnchainApp() {
                 <b>{book.title}</b>
                 <div className="meta">{book.author}</div>
               </div>
+              <button
+                className={marked ? "ghost on" : "ghost"}
+                aria-pressed={Boolean(marked)}
+                aria-label={marked ? "Yer imini kaldır" : "Yer imi koy"}
+                onClick={() => {
+                  if (!book || !here) return;
+                  setLib((prev) => toggleBookmark(prev, book, here));
+                }}
+              >
+                {marked ? "İşaretli" : "Yer imi"}
+              </button>
               <button className="iconbtn" aria-label="Menü" onClick={() => setSheet("more")}>
                 …
               </button>
@@ -1409,6 +1424,30 @@ export function UnchainApp() {
             >
               Ses
             </button>
+            <button
+              className="listbtn"
+              aria-label={marked ? "Yer imini kaldır" : "Yer imi koy"}
+              onClick={() => {
+                if (!book || !here) return;
+                setLib((prev) => toggleBookmark(prev, book, here));
+              }}
+            >
+              {marked ? "Yer imini kaldır" : "Yer imi koy"}
+            </button>
+            {bookMarks.map((mark) => (
+              <button
+                key={mark.id}
+                className="listbtn"
+                aria-label={`Yer imine git. ${mark.label}`}
+                onClick={() => {
+                  seek({ bookId: mark.bookId, chapter: mark.chapter, sentence: mark.sentence, word: mark.word });
+                  setSheet(null);
+                }}
+              >
+                {mark.label}
+                <div className="meta">Yer imi</div>
+              </button>
+            ))}
             {lib.collections.map((name) => (
               <button
                 key={name}
@@ -1430,12 +1469,15 @@ export function UnchainApp() {
                 setLib((prev) => {
                   const books = prev.books.filter((b) => b.id !== book.id);
                   const fallback = books[0];
-                  return {
-                    ...prev,
-                    books,
-                    currentId: fallback?.id ?? null,
-                    cursor: fallback ? { bookId: fallback.id, chapter: 0, sentence: 0, word: 0 } : null
-                  };
+                  return dropBookBookmarks(
+                    {
+                      ...prev,
+                      books,
+                      currentId: fallback?.id ?? null,
+                      cursor: fallback ? { bookId: fallback.id, chapter: 0, sentence: 0, word: 0 } : null
+                    },
+                    book.id
+                  );
                 });
                 setView("library");
                 setSheet(null);
