@@ -18,6 +18,24 @@ for (const name of ["ort-wasm-simd-threaded.wasm", "ort-wasm-simd-threaded.mjs"]
   copyFileSync(src, path.join(ortDest, name));
 }
 
+const ocrDest = path.join(process.cwd(), "public", "ocr");
+const coreDir = path.join(process.cwd(), "node_modules", "tesseract.js-core");
+const ocrCopies: [string, string][] = [
+  [path.join(process.cwd(), "node_modules", "tesseract.js", "dist", "worker.min.js"), "worker.min.js"],
+  [path.join(coreDir, "tesseract-core-lstm.wasm.js"), "tesseract-core-lstm.wasm.js"],
+  [path.join(coreDir, "tesseract-core-lstm.wasm"), "tesseract-core-lstm.wasm"],
+  [path.join(coreDir, "tesseract-core-simd-lstm.wasm.js"), "tesseract-core-simd-lstm.wasm.js"],
+  [path.join(coreDir, "tesseract-core-simd-lstm.wasm"), "tesseract-core-simd-lstm.wasm"],
+  [path.join(coreDir, "tesseract-core-relaxedsimd-lstm.wasm.js"), "tesseract-core-relaxedsimd-lstm.wasm.js"],
+  [path.join(coreDir, "tesseract-core-relaxedsimd-lstm.wasm"), "tesseract-core-relaxedsimd-lstm.wasm"],
+  [path.join(process.cwd(), "node_modules", "@tesseract.js-data", "tur", "4.0.0_best_int", "tur.traineddata.gz"), "tur.traineddata.gz"]
+];
+for (const [src, name] of ocrCopies) {
+  if (!existsSync(src)) continue;
+  mkdirSync(ocrDest, { recursive: true });
+  copyFileSync(src, path.join(ocrDest, name));
+}
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -34,6 +52,10 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/ort/ort-wasm-simd-threaded.wasm",
+        headers: [{ key: "Content-Type", value: "application/wasm" }]
+      },
+      {
+        source: "/ocr/:file.wasm",
         headers: [{ key: "Content-Type", value: "application/wasm" }]
       }
     ];

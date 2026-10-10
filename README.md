@@ -6,7 +6,8 @@ Site: [unchain.noniux.com](https://unchain.noniux.com)
 
 Unchain açık kaynak bir okuyucudur. Web okuyucusu PDF, EPUB, DOCX, ODT, RTF,
 FB2, TXT ve MD dosyalarını tarayıcıda bölümlere ayırır. Giriş yokken dosya
-sunucuya gitmez.
+sunucuya gitmez. PNG, JPEG ve WebP görüntüleri de tarayıcıda okunur;
+görüntünün kendisi sunucuya gitmez. Android bu taramayı açmaz.
 Web’de giriş yapınca kitaplığın bir kopyası Vercel’de durur; yüklemeden önce
 bu söylenir. Ses
 [EMA Lightning](https://huggingface.co/canberkkkkkk/ema-lightning): tek ses,

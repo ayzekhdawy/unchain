@@ -37,6 +37,7 @@ import { emaSpeak, loadEma, resampleLinear, resumeAudio } from "@/lib/ema";
 import { FILE_MAX } from "@/lib/hesap";
 import { ImportError, importFile } from "@/lib/import";
 import { setAmbient, stopAmbient } from "@/lib/ortam";
+import { bookFromScan, readScan } from "@/lib/tara";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
 type LibTab = "saved" | "collections" | "archive";
@@ -55,6 +56,7 @@ const THEMES: { id: ReadingTheme; label: string }[] = [
   { id: "kagit", label: "Kâğıt" }
 ];
 const FORMAT_NOTE = "PDF, EPUB, DOCX, ODT, RTF, FB2, TXT ve MD bu tarayıcıda açılır.";
+const SCAN_NOTE = "PNG, JPEG ve WebP bu tarayıcıda okunur. Görüntü sunucuya gitmez.";
 
 const SLEEP = [
   { id: "off", label: "Kapalı" },
@@ -109,6 +111,7 @@ export function UnchainApp() {
   const [linkError, setLinkError] = useState("");
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
   const [openBook, setOpenBook] = useState<string | null>(null);
   const [collectionName, setCollectionName] = useState("");
@@ -123,6 +126,7 @@ export function UnchainApp() {
   const [girisNote, setGirisNote] = useState("");
   const [pending, setPending] = useState<{ book: Book; warning?: string | null; file?: File } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const scanRef = useRef<HTMLInputElement>(null);
   const sleepUntil = useRef<number | null>(null);
   const emaOk = useRef(true);
   const heardEma = useRef(false);
@@ -463,6 +467,32 @@ export function UnchainApp() {
       setSheet("import");
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function onScan(file: File) {
+    setImportError("");
+    const name = file.name.toLowerCase();
+    const image = file.type === "image/png" || file.type === "image/jpeg" || file.type === "image/webp" || /\.(png|jpe?g|webp)$/.test(name);
+    if (!image) {
+      setImportError("Bu görüntü türü açılmıyor. PNG, JPEG veya WebP seç.");
+      setSheet("import");
+      return;
+    }
+    if (file.size > FILE_MAX) {
+      setImportError("4 MB üstü görüntü taranmaz.");
+      setSheet("import");
+      return;
+    }
+    setScanning(true);
+    try {
+      const text = await readScan(file);
+      stageBook(bookFromScan(text, lib.profileName));
+    } catch (err) {
+      setImportError(err instanceof ImportError ? err.message : "Görüntü okunamadı.");
+      setSheet("import");
+    } finally {
+      setScanning(false);
     }
   }
 
@@ -1167,6 +1197,17 @@ export function UnchainApp() {
           e.target.value = "";
         }}
       />
+      <input
+        ref={scanRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void onScan(file);
+          e.target.value = "";
+        }}
+      />
 
       {sheet === "import" && (
         <div className="sheet" onClick={() => setSheet(null)}>
@@ -1190,8 +1231,8 @@ export function UnchainApp() {
               <button disabled={importing} onClick={() => fileRef.current?.click()}>
                 {importing ? "Ayrıştırılıyor…" : "Dosya yükle"}
               </button>
-              <button disabled title="Sıradaki dilim">
-                Metin tara
+              <button disabled={scanning} onClick={() => scanRef.current?.click()}>
+                {scanning ? "Okunuyor…" : "Metin tara"}
               </button>
               <button
                 onClick={() => {
@@ -1216,6 +1257,9 @@ export function UnchainApp() {
               {sessionEmail
                 ? `${FORMAT_NOTE} Kaydetmeden önce kopyanın Vercel’de duracağı söylenir.`
                 : `${FORMAT_NOTE} Dosya sunucuya gitmez.`}
+            </p>
+            <p className="note">
+              {sessionEmail ? `${SCAN_NOTE} Okunan metin kaydedilince Vercel’de durur.` : `${SCAN_NOTE} Okunan metin bu tarayıcıda kalır.`}
             </p>
             {importError && <p className="note">{importError}</p>}
           </div>

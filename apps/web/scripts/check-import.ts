@@ -188,7 +188,10 @@ async function main() {
   } catch (err) {
     threw = true;
     assert(err instanceof ImportError, String(err));
-    assert(err instanceof ImportError && err.message.includes("seçilebilir metin"), err instanceof ImportError ? err.message : "");
+    assert(
+      err instanceof ImportError && err.message.includes("seçilebilir metin") && err.message.includes("Metin tara"),
+      err instanceof ImportError ? err.message : ""
+    );
   }
   assert(threw, "taranmış PDF kitap üretti");
   console.log("check:import ok");

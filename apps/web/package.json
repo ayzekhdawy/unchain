@@ -9,10 +9,12 @@
     "check:ema": "tsx scripts/check-ema.ts",
     "check:catalog": "tsx scripts/check-catalog.ts",
     "check:hesap": "tsx scripts/check-hesap.ts",
-    "check:ortam": "tsx scripts/check-ortam.ts"
+    "check:ortam": "tsx scripts/check-ortam.ts",
+    "check:tara": "tsx scripts/check-tara.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
+    "@tesseract.js-data/tur": "^1.0.0",
     "@vercel/blob": "^2.8.1",
     "fflate": "^0.8.3",
     "mammoth": "^1.13.0",
@@ -20,7 +22,8 @@
     "onnxruntime-web": "^1.30.0",
     "pdfjs-dist": "^6.4.299",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",

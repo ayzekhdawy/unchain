@@ -83,7 +83,7 @@ async function importPdf(data: ArrayBuffer, filename: string, fallbackAuthor: st
   const { blocks, emptyPages } = pagesToBlocks(loaded.pages);
   const spoken = blocks.map((block) => block.text).join(" ").trim();
   if (spoken.length < 20) {
-    throw new ImportError("Bu PDF’te seçilebilir metin yok. Taranmış sayfa bu dilimde okunmaz.");
+    throw new ImportError("Bu PDF’te seçilebilir metin yok. Sayfanın görüntüsünü Metin tara ile aç.");
   }
   assertLength(spoken);
   const warning =

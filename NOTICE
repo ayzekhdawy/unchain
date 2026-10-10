@@ -35,4 +35,9 @@ Ambient loops Yağmur, Ocak and Oda are original and dedicated to the
 public domain under CC0 1.0. See apps/web/public/ortam/LICENSE.
 https://creativecommons.org/publicdomain/zero/1.0/
 
+Image text is read in the browser with Tesseract.js, Apache License 2.0.
+https://github.com/naptha/tesseract.js
+The Turkish model is @tesseract.js-data/tur, MIT License.
+https://github.com/naptha/tessdata
+
 Commercial redistributions must also keep ATTRIBUTION.md.
