@@ -8,7 +8,8 @@
     "check:import": "tsx scripts/check-import.ts",
     "check:ema": "tsx scripts/check-ema.ts",
     "check:catalog": "tsx scripts/check-catalog.ts",
-    "check:hesap": "tsx scripts/check-hesap.ts"
+    "check:hesap": "tsx scripts/check-hesap.ts",
+    "check:ortam": "tsx scripts/check-ortam.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

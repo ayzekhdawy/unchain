@@ -55,6 +55,8 @@ const old = normalizeLibrary({
 });
 assert(old.collections[0] === "Sonra oku", "eski kayıt");
 assert(old.spokenSeconds === 0, "eski süre");
+assert(old.theme === "gece", "eski tema");
+assert(old.ambient === "yok", "eski ortam");
 assert(formatSpoken(0) === "0 sn", formatSpoken(0));
 assert(formatSpoken(75) === "1 dk 15 sn", formatSpoken(75));
 assert(shelfKind({ ...fresh.books[0], source: "pdf" }) === "ice", "pdf");

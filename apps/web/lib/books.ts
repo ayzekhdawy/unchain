@@ -2,7 +2,9 @@ import type { TextBlock } from "./structure";
 
 export type Sentence = { id: string; text: string };
 export type Chapter = { id: string; title: string; sentences: Sentence[] };
-export type BookSource = "text" | "txt" | "md" | "pdf" | "epub" | "docx" | "link" | "scan" | "sample" | "pd";
+export type BookSource = "text" | "txt" | "md" | "pdf" | "epub" | "docx" | "odt" | "rtf" | "fb2" | "link" | "scan" | "sample" | "pd";
+export type ReadingTheme = "gece" | "kagit";
+export type AmbientName = "yok" | "yagmur" | "ocak" | "oda";
 export type ShelfKind = "kitap" | "ice" | "link" | "metin";
 
 export type Book = {
@@ -29,6 +31,9 @@ export type Library = {
   cursor: Cursor | null;
   collections: string[];
   spokenSeconds: number;
+  theme: ReadingTheme;
+  ambient: AmbientName;
+  ambientLevel: number;
 };
 
 const COVERS = [
@@ -173,7 +178,10 @@ export function emptyLibrary(): Library {
     currentId: SAMPLE.id,
     cursor: { bookId: SAMPLE.id, chapter: 0, sentence: 0, word: 0 },
     collections: [],
-    spokenSeconds: 0
+    spokenSeconds: 0,
+    theme: "gece",
+    ambient: "yok",
+    ambientLevel: 0.45
   };
 }
 
@@ -191,6 +199,8 @@ export function normalizeLibrary(raw: Partial<Library> | null | undefined): Libr
   }
   const speed = typeof raw.speed === "number" && raw.speed > 0 ? raw.speed : 1;
   const spoken = typeof raw.spokenSeconds === "number" && raw.spokenSeconds >= 0 ? raw.spokenSeconds : 0;
+  const ambient = raw.ambient === "yagmur" || raw.ambient === "ocak" || raw.ambient === "oda" ? raw.ambient : "yok";
+  const level = typeof raw.ambientLevel === "number" && raw.ambientLevel >= 0 && raw.ambientLevel <= 1 ? raw.ambientLevel : 0.45;
   return {
     profileName: raw.profileName?.trim() || base.profileName,
     speed,
@@ -200,7 +210,10 @@ export function normalizeLibrary(raw: Partial<Library> | null | undefined): Libr
     currentId: raw.currentId ?? raw.books[0].id,
     cursor: raw.cursor ?? { bookId: raw.books[0].id, chapter: 0, sentence: 0, word: 0 },
     collections: [...names],
-    spokenSeconds: spoken
+    spokenSeconds: spoken,
+    theme: raw.theme === "kagit" ? "kagit" : "gece",
+    ambient,
+    ambientLevel: level
   };
 }
 

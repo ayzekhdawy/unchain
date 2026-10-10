@@ -33,7 +33,7 @@ export default function HomePage() {
           <p className="kicker">Açık kaynak okuyucu</p>
           <h1>Türkçe kitabı telefonda sese çevirir.</h1>
           <p className="lede">
-            Telefonda metin ve ses cihazdan çıkmaz. PDF, EPUB ve düz yazı bölümlere ayrılır, tek bir açık sesle okunur.
+            Telefonda metin ve ses cihazdan çıkmaz. PDF, EPUB, DOCX, ODT, RTF, FB2 ve düz yazı bölümlere ayrılır, tek bir açık sesle okunur.
             Web’de giriş yapınca kitaplığın bir kopyası Vercel’de durur; yüklemeden önce bu söylenir.
           </p>
           <div className="actions">

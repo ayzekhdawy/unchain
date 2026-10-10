@@ -31,4 +31,8 @@ https://github.com/neondatabase/serverless
 Private files and cached audio use @vercel/blob, Apache License, Version 2.0.
 https://github.com/vercel/storage
 
+Ambient loops Yağmur, Ocak and Oda are original and dedicated to the
+public domain under CC0 1.0. See apps/web/public/ortam/LICENSE.
+https://creativecommons.org/publicdomain/zero/1.0/
+
 Commercial redistributions must also keep ATTRIBUTION.md.

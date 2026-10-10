@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { strToU8, zipSync } from "fflate";
 import { pagesToBlocks, type PdfPage } from "../lib/structure";
 
 const require = createRequire(import.meta.url);
@@ -127,6 +128,58 @@ async function main() {
       throw err;
     }
   }
+
+  const odt = zipSync({
+    mimetype: strToU8("application/vnd.oasis.opendocument.text"),
+    "content.xml": strToU8(
+      `<?xml version="1.0"?><office:document-content><office:body><office:text><text:h>İlk sayfa</text:h><text:p>Gün doğmadan kuşlar öttü.</text:p><text:p>1</text:p></office:text></office:body></office:document-content>`
+    ),
+    "meta.xml": strToU8(`<office:document-meta><office:meta><dc:title>Gece odt</dc:title><dc:creator>Deneme</dc:creator></office:meta></office:document-meta>`)
+  });
+  const odtBook = await importFile(new File([odt], "gece.odt"), "Profil");
+  const odtText = spokenOf(odtBook.book);
+  assert(odtBook.book.title === "Gece odt", odtBook.book.title);
+  assert(odtBook.book.author === "Deneme", odtBook.book.author);
+  assert(odtBook.book.source === "odt", odtBook.book.source);
+  assert(odtText.includes("İlk sayfa") && odtText.includes("Gün doğmadan"), odtText);
+  assert(!odtText.includes(" 1"), odtText);
+
+  const rtf = await importFile(
+    new File(
+      ["{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\\uc1 Gece inince oda k\\'fc\\'e7\\'fcl\\'fcr.\\par \\u304?kinci c\\'fcmle bitti.}"],
+      "gece.rtf"
+    ),
+    "Profil"
+  );
+  const rtfText = spokenOf(rtf.book);
+  assert(rtf.book.source === "rtf", rtf.book.source);
+  assert(rtfText.includes("küçülür") && rtfText.includes("İkinci cümle bitti"), rtfText);
+  assert(!rtfText.includes("Arial"), rtfText);
+
+  const fb2 = await importFile(
+    new File(
+      [
+        `<?xml version="1.0" encoding="utf-8"?><FictionBook><description><title-info><book-title>Gece fb2</book-title><author><first-name>Deneme</first-name><last-name>Yazar</last-name></author><annotation><p>Bu not okunmaz.</p></annotation></title-info></description><body><section><title><p>İlk sayfa</p></title><p>Gün doğmadan kuşlar öttü.</p></section></body></FictionBook>`
+      ],
+      "gece.fb2"
+    ),
+    "Profil"
+  );
+  const fb2Text = spokenOf(fb2.book);
+  assert(fb2.book.title === "Gece fb2", fb2.book.title);
+  assert(fb2.book.author === "Deneme Yazar", fb2.book.author);
+  assert(fb2.book.source === "fb2", fb2.book.source);
+  assert(fb2Text.includes("İlk sayfa") && fb2Text.includes("Gün doğmadan"), fb2Text);
+  assert(!fb2Text.includes("Bu not okunmaz"), fb2Text);
+
+  let unknown = false;
+  try {
+    await importFile(new File(["yok"], "gece.xyz"), "Profil");
+  } catch (err) {
+    unknown = true;
+    assert(err instanceof ImportError && err.message.includes("ODT"), err instanceof ImportError ? err.message : String(err));
+  }
+  assert(unknown, "bilinmeyen tür açıldı");
 
   const scanned = readFileSync(path.join(root, "gece-taranmis.pdf"));
   let threw = false;

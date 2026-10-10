@@ -15,9 +15,11 @@ import {
   progressOf,
   sentenceAt,
   shelfKind,
+  type AmbientName,
   type Book,
   type Cursor,
   type Library,
+  type ReadingTheme,
   type ShelfKind
 } from "@/lib/books";
 import {
@@ -34,12 +36,25 @@ import { bookFromCatalog, CATALOG, type CatalogShelf, type CatalogWork } from "@
 import { emaSpeak, loadEma, resampleLinear, resumeAudio } from "@/lib/ema";
 import { FILE_MAX } from "@/lib/hesap";
 import { ImportError, importFile } from "@/lib/import";
+import { setAmbient, stopAmbient } from "@/lib/ortam";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
 type LibTab = "saved" | "collections" | "archive";
 type Sheet = null | "import" | "contents" | "sleep" | "more";
 type KindFilter = "hepsi" | ShelfKind;
 type ShelfFilter = "hepsi" | CatalogShelf | "ornek";
+
+const AMBIENTS: { id: AmbientName; label: string }[] = [
+  { id: "yok", label: "Kapalı" },
+  { id: "yagmur", label: "Yağmur" },
+  { id: "ocak", label: "Ocak" },
+  { id: "oda", label: "Oda" }
+];
+const THEMES: { id: ReadingTheme; label: string }[] = [
+  { id: "gece", label: "Gece" },
+  { id: "kagit", label: "Kâğıt" }
+];
+const FORMAT_NOTE = "PDF, EPUB, DOCX, ODT, RTF, FB2, TXT ve MD bu tarayıcıda açılır.";
 
 const SLEEP = [
   { id: "off", label: "Kapalı" },
@@ -322,6 +337,22 @@ export function UnchainApp() {
     };
   }, [playing, book, cursor, lib.speed, lib.pronunciations, sleep, sessionEmail]);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = lib.theme === "kagit" ? "kagit" : "gece";
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, [lib.theme]);
+
+  useEffect(() => {
+    if (!playing || lib.ambient === "yok") {
+      stopAmbient();
+      return;
+    }
+    setAmbient(lib.ambient, lib.ambientLevel);
+    return () => stopAmbient();
+  }, [playing, lib.ambient, lib.ambientLevel]);
+
   const saved = lib.books.filter((b) => !b.archived);
   const archived = lib.books.filter((b) => b.archived);
   const collections = lib.collections;
@@ -520,8 +551,8 @@ export function UnchainApp() {
             </div>
             <p className="note">
               {sessionEmail
-                ? "PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Kaydetmeden önce kopyanın Vercel’de duracağı söylenir."
-                : "PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Dosya sunucuya gitmez."}
+                ? `${FORMAT_NOTE} Kaydetmeden önce kopyanın Vercel’de duracağı söylenir.`
+                : `${FORMAT_NOTE} Dosya sunucuya gitmez.`}
             </p>
             <p className="section-label">Rafta</p>
             <div className="cardgrid">
@@ -862,6 +893,20 @@ export function UnchainApp() {
               </p>
             ))}
             <p className="note">EMA Lightning, Canberk Aslan, Apache 2.0. normalizer-tr, Erdem Tuna. ONNX Runtime Web, Microsoft, MIT.</p>
+            <p className="note">Ortam döngüleri Yağmur, Ocak ve Oda, CC0. Anlatıcının altında kalır.</p>
+            <p className="section-label">Tema</p>
+            <div className="pills" role="group" aria-label="Tema">
+              {THEMES.map((item) => (
+                <button
+                  key={item.id}
+                  className={lib.theme === item.id ? "pill on" : "pill"}
+                  onClick={() => setLib((prev) => ({ ...prev, theme: item.id }))}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <p className="note">Varsayılan gece okumasıdır. Kâğıt açık zemindir.</p>
             <button className="listbtn" onClick={() => setView("voice")}>
               Ses
             </button>
@@ -962,6 +1007,9 @@ export function UnchainApp() {
                     : `Ema. Bu ses yapay zekâ ile üretilmiştir.${emaSeconds !== null ? ` İlk cümle ${emaSeconds.toFixed(1)} saniyede üretildi.` : ""}`}
             </p>
             {importNote && <p className="note">{importNote}</p>}
+            <p className="sr" aria-live="polite" aria-atomic="true">
+              {playing ? `Okunan cümle. ${book.chapters[cursor.chapter]?.sentences[cursor.sentence]?.text ?? ""}` : ""}
+            </p>
             <article>
               {book.chapters.map((chapter, ci) => (
                 <section key={chapter.id}>
@@ -973,6 +1021,7 @@ export function UnchainApp() {
                       <p
                         key={sentence.id}
                         className={live ? "live" : undefined}
+                        aria-current={live ? "true" : undefined}
                         onClick={() => seek({ bookId: book.id, chapter: ci, sentence: si, word: 0 })}
                       >
                         {tokens.map((token, wi) => (
@@ -1019,6 +1068,12 @@ export function UnchainApp() {
                   {lib.speed.toFixed(1)}x
                 </button>
               </div>
+              <AmbientRow
+                ambient={lib.ambient}
+                level={lib.ambientLevel}
+                onPick={(ambient) => setLib((prev) => ({ ...prev, ambient }))}
+                onLevel={(ambientLevel) => setLib((prev) => ({ ...prev, ambientLevel }))}
+              />
             </div>
           </div>
         )}
@@ -1040,6 +1095,12 @@ export function UnchainApp() {
                 ? "Masaüstünde okuyucu bu kolonun yanında açılır. Giriş yaptığın kitaplık Vercel’de durur."
                 : "Masaüstünde okuyucu bu kolonun yanında açılır. Kitaplık verisi bu tarayıcıda tutulur."}
             </p>
+            <AmbientRow
+              ambient={lib.ambient}
+              level={lib.ambientLevel}
+              onPick={(ambient) => setLib((prev) => ({ ...prev, ambient }))}
+              onLevel={(ambientLevel) => setLib((prev) => ({ ...prev, ambientLevel }))}
+            />
           </>
         ) : (
           <p className="note">Kitaplık boş.</p>
@@ -1098,7 +1159,7 @@ export function UnchainApp() {
       <input
         ref={fileRef}
         type="file"
-        accept=".pdf,.epub,.docx,.txt,.md,application/pdf,application/epub+zip,text/plain"
+        accept=".pdf,.epub,.docx,.odt,.rtf,.fb2,.txt,.md,application/pdf,application/epub+zip,text/plain"
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -1153,8 +1214,8 @@ export function UnchainApp() {
             </button>
             <p className="note">
               {sessionEmail
-                ? "PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Kaydetmeden önce kopyanın Vercel’de duracağı söylenir."
-                : "PDF, EPUB, DOCX, TXT ve MD bu tarayıcıda açılır. Dosya sunucuya gitmez."}
+                ? `${FORMAT_NOTE} Kaydetmeden önce kopyanın Vercel’de duracağı söylenir.`
+                : `${FORMAT_NOTE} Dosya sunucuya gitmez.`}
             </p>
             {importError && <p className="note">{importError}</p>}
           </div>
@@ -1262,6 +1323,42 @@ export function UnchainApp() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function AmbientRow({
+  ambient,
+  level,
+  onPick,
+  onLevel
+}: {
+  ambient: AmbientName;
+  level: number;
+  onPick: (ambient: AmbientName) => void;
+  onLevel: (level: number) => void;
+}) {
+  return (
+    <div data-ambient={ambient}>
+      <div className="pills" role="group" aria-label="Ortam">
+        {AMBIENTS.map((item) => (
+          <button key={item.id} className={ambient === item.id ? "pill on" : "pill"} onClick={() => onPick(item.id)}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <input
+        className="slider"
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={level}
+        aria-label="Ortam düzeyi"
+        disabled={ambient === "yok"}
+        onChange={(e) => onLevel(Number(e.target.value))}
+      />
+      <p className="note">Ortam anlatıcının altında kalır. Döngüler CC0.</p>
     </div>
   );
 }

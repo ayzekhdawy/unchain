@@ -1,4 +1,5 @@
 import { strFromU8, unzipSync } from "fflate";
+import { fb2Document, odtDocument, rtfBlocks } from "./belge";
 import { bookFromBlocks, bookFromText, type Book, type BookSource } from "./books";
 import { decodeEntities, htmlToBlocks, isPageChrome, pagesToBlocks, type PdfLine, type PdfPage, type TextBlock } from "./structure";
 
@@ -29,7 +30,10 @@ export async function importFile(file: File, author: string): Promise<ImportResu
   if (name.endsWith(".pdf")) return importPdf(await file.arrayBuffer(), file.name, author);
   if (name.endsWith(".epub")) return importEpub(new Uint8Array(await file.arrayBuffer()), file.name, author);
   if (name.endsWith(".docx")) return importDocx(await file.arrayBuffer(), file.name, author);
-  throw new ImportError("Bu dosya türü henüz açılmıyor. PDF, EPUB, DOCX, TXT veya MD seç.");
+  if (name.endsWith(".odt")) return importOdt(new Uint8Array(await file.arrayBuffer()), file.name, author);
+  if (name.endsWith(".rtf")) return importRtf(await file.text(), file.name, author);
+  if (name.endsWith(".fb2")) return importFb2(await file.text(), file.name, author);
+  throw new ImportError("Bu dosya türü henüz açılmıyor. PDF, EPUB, DOCX, ODT, RTF, FB2, TXT veya MD seç.");
 }
 
 export async function loadPdfPages(data: ArrayBuffer): Promise<{ pages: PdfPage[]; title: string; author: string }> {
@@ -174,6 +178,33 @@ async function importDocx(data: ArrayBuffer, filename: string, fallbackAuthor: s
     /* metadata isteğe bağlı */
   }
   return { book: bookFromBlocks(title, author, blocks, "docx"), warning: null };
+}
+
+async function importOdt(bytes: Uint8Array, filename: string, fallbackAuthor: string): Promise<ImportResult> {
+  const doc = odtDocument(bytes);
+  return finishMarkup(doc.blocks, doc.title || titleFromName(filename), doc.author || fallbackAuthor, "odt", "Bu dosya geçerli bir ODT değil.");
+}
+
+async function importRtf(text: string, filename: string, fallbackAuthor: string): Promise<ImportResult> {
+  return finishMarkup(rtfBlocks(text), titleFromName(filename), fallbackAuthor, "rtf", "Bu dosya geçerli bir RTF değil.");
+}
+
+async function importFb2(text: string, filename: string, fallbackAuthor: string): Promise<ImportResult> {
+  const doc = fb2Document(text);
+  return finishMarkup(doc.blocks, doc.title || titleFromName(filename), doc.author || fallbackAuthor, "fb2", "Bu dosya geçerli bir FB2 değil.");
+}
+
+function finishMarkup(
+  blocks: TextBlock[],
+  title: string,
+  author: string,
+  source: BookSource,
+  emptyMessage: string
+): ImportResult {
+  const spoken = blocks.map((block) => block.text).join(" ").trim();
+  if (spoken.length < 10) throw new ImportError(emptyMessage);
+  assertLength(spoken);
+  return { book: bookFromBlocks(title, author, blocks, source), warning: null };
 }
 
 async function loadPdfjs() {

@@ -4,8 +4,9 @@ Türkçe kitabı telefonda sese çevirir. Telefonda metin ve ses cihazdan çıkm
 
 Site: [unchain.noniux.com](https://unchain.noniux.com)
 
-Unchain açık kaynak bir okuyucudur. Web okuyucusu PDF, EPUB, DOCX, TXT ve MD
-dosyalarını tarayıcıda bölümlere ayırır. Giriş yokken dosya sunucuya gitmez.
+Unchain açık kaynak bir okuyucudur. Web okuyucusu PDF, EPUB, DOCX, ODT, RTF,
+FB2, TXT ve MD dosyalarını tarayıcıda bölümlere ayırır. Giriş yokken dosya
+sunucuya gitmez.
 Web’de giriş yapınca kitaplığın bir kopyası Vercel’de durur; yüklemeden önce
 bu söylenir. Ses
 [EMA Lightning](https://huggingface.co/canberkkkkkk/ema-lightning): tek ses,
@@ -37,6 +38,10 @@ brand           İşaret ve Gece Okuma paleti
 docs            EMA ölçüm kapısı ve kamu malı katalog
 tools           Ölçüm betiği
 ```
+
+Varsayılan tema gece okumasıdır. Kâğıt açık zemin isteğe bağlıdır. Yağmur,
+Ocak ve Oda döngüleri CC0’dur ve anlatıcının altında, en çok 0,12 kazançla
+karışır.
 
 ## Ses
 
