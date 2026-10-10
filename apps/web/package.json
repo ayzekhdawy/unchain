@@ -14,7 +14,8 @@
     "check:seek": "tsx scripts/check-seek.ts",
     "check:kaydir": "tsx scripts/check-kaydir.ts",
     "check:pdf-sayfa": "tsx scripts/check-pdf-sayfa.ts",
-    "check:yer-imi": "tsx scripts/check-yer-imi.ts"
+    "check:yer-imi": "tsx scripts/check-yer-imi.ts",
+    "check:kuyruk": "tsx scripts/check-kuyruk.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

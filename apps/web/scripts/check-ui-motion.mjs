@@ -150,6 +150,25 @@ for (const vp of viewports) {
     "aria"
   );
   await shot(page, `${vp.name}-reader`);
+  if (vp.name === "phone") {
+    await page.getByRole("button", { name: "Menü" }).click();
+    await page.getByRole("button", { name: /Dinleme kuyruğu/ }).click();
+    await page.getByText("Kuyruk boş.").waitFor();
+    await page.getByRole("button", { name: "Gece okuması kitabını kuyruğa ekle" }).click();
+    await page.getByText("Sıradaki", { exact: true }).waitFor();
+    const queued = await page.locator(".sheet .panel").boundingBox();
+    assert("phone queue panel on screen", Boolean(queued && queued.y >= -2 && queued.y < vp.height), JSON.stringify(queued));
+    const queueDoc = await measure(page);
+    assert("phone queue no sideways page", queueDoc.doc.scrollWidth <= queueDoc.doc.clientWidth + 1, JSON.stringify(queueDoc.doc));
+    await shot(page, "phone-queue");
+    await page.getByRole("button", { name: "Gece okuması kitabını kuyruktan çıkar" }).click();
+    await page.getByText("Kuyruk boş.").waitFor();
+    assert(
+      "phone queue leaves play as Oynat",
+      (await page.getByRole("button", { name: "Oynat" }).getAttribute("aria-label")) === "Oynat",
+      "aria"
+    );
+  }
   await page.close();
 }
 

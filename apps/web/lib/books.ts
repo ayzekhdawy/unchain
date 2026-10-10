@@ -1,3 +1,4 @@
+import { cleanQueue } from "./kuyruk";
 import type { TextBlock } from "./structure";
 import { cleanBookmarks, type Bookmark } from "./yer-imi";
 
@@ -36,6 +37,7 @@ export type Library = {
   ambient: AmbientName;
   ambientLevel: number;
   bookmarks: Bookmark[];
+  queue: string[];
 };
 
 const COVERS = [
@@ -184,7 +186,8 @@ export function emptyLibrary(): Library {
     theme: "gece",
     ambient: "yok",
     ambientLevel: 0.45,
-    bookmarks: []
+    bookmarks: [],
+    queue: []
   };
 }
 
@@ -217,7 +220,8 @@ export function normalizeLibrary(raw: Partial<Library> | null | undefined): Libr
     theme: raw.theme === "kagit" ? "kagit" : "gece",
     ambient,
     ambientLevel: level,
-    bookmarks: cleanBookmarks(raw.bookmarks, raw.books)
+    bookmarks: cleanBookmarks(raw.bookmarks, raw.books),
+    queue: cleanQueue(raw.queue, raw.books)
   };
 }
 

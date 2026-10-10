@@ -40,11 +40,12 @@ import { setAmbient, stopAmbient } from "@/lib/ortam";
 import { pdfScanTitle } from "@/lib/pdf-sayfa";
 import { bookFromScan, readPdfScan, readScan } from "@/lib/tara";
 import { SWIPE_WIDTH, swipeAxis, swipeOffset, swipeSettlesOpen } from "@/lib/kaydir";
+import { QUEUE_CAP, dropBookQueue, enqueueBook, moveQueued, removeQueued, takeNext } from "@/lib/kuyruk";
 import { bookmarkAt, bookmarksFor, dropBookBookmarks, toggleBookmark, type Bookmark } from "@/lib/yer-imi";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
 type LibTab = "saved" | "collections" | "archive";
-type Sheet = null | "import" | "contents" | "sleep" | "more";
+type Sheet = null | "import" | "contents" | "sleep" | "more" | "queue";
 type KindFilter = "hepsi" | ShelfKind;
 type ShelfFilter = "hepsi" | CatalogShelf | "ornek";
 
@@ -156,6 +157,8 @@ export function UnchainApp() {
   const emaOk = useRef(true);
   const heardEma = useRef(false);
   const hydrated = useRef(false);
+  const libRef = useRef(lib);
+  libRef.current = lib;
   const cloudGen = useRef(0);
 
   useEffect(() => {
@@ -256,14 +259,30 @@ export function UnchainApp() {
       const next = moveSentences(book, cursor, 1);
       const stuck = next.chapter === cursor.chapter && next.sentence === cursor.sentence;
       if (stuck || (sleep === "chapter" && next.chapter !== cursor.chapter)) {
-        setPlaying(false);
-        if (!stuck) {
+        if (stuck) {
+          const step = takeNext(libRef.current, book.id);
+          if (step.bookId) {
+            const opened = step.bookId;
+            setLib({
+              ...step.library,
+              currentId: opened,
+              cursor: { bookId: opened, chapter: 0, sentence: 0, word: 0 },
+              books: step.library.books.map((item) =>
+                item.id === book.id || item.id === opened ? { ...item, unread: false } : item
+              )
+            });
+            setWord(0);
+            return;
+          }
+          if (step.library !== libRef.current) setLib(step.library);
+        } else {
           setLib((prev) => ({
             ...prev,
             cursor: next,
             books: prev.books.map((item) => (item.id === book.id ? { ...item, unread: false } : item))
           }));
         }
+        setPlaying(false);
         return;
       }
       setWord(0);
@@ -1429,6 +1448,73 @@ export function UnchainApp() {
         </div>
       )}
 
+      {sheet === "queue" && (
+        <div className="sheet" onClick={() => setSheet(null)}>
+          <div className="panel" onClick={(e) => e.stopPropagation()}>
+            <div className="head">
+              <b>Dinleme kuyruğu</b>
+              <button className="ghost" style={{ marginLeft: "auto" }} onClick={() => setSheet(null)}>
+                Kapat
+              </button>
+            </div>
+            <p className="meta">Bu kitap bitince sıradaki baştan açılır. En çok {QUEUE_CAP} kitap.</p>
+            {lib.queue.length === 0 && <p>Kuyruk boş.</p>}
+            {lib.queue.map((id, index) => {
+              const item = lib.books.find((entry) => entry.id === id);
+              if (!item) return null;
+              return (
+                <div key={id} className="listbtn">
+                  <b>{item.title}</b>
+                  <div className="meta">{index === 0 ? "Sıradaki" : `Sıra ${index + 1}`}</div>
+                  <div className="pills">
+                    <button
+                      type="button"
+                      className="ghost"
+                      aria-label={`${item.title} kitabını yukarı taşı`}
+                      disabled={index === 0}
+                      onClick={() => setLib((prev) => moveQueued(prev, id, -1))}
+                    >
+                      Yukarı
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      aria-label={`${item.title} kitabını aşağı taşı`}
+                      disabled={index === lib.queue.length - 1}
+                      onClick={() => setLib((prev) => moveQueued(prev, id, 1))}
+                    >
+                      Aşağı
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      aria-label={`${item.title} kitabını kuyruktan çıkar`}
+                      onClick={() => setLib((prev) => removeQueued(prev, id))}
+                    >
+                      Çıkar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {lib.books
+              .filter((item) => !item.archived && !lib.queue.includes(item.id))
+              .map((item) => (
+                <button
+                  key={item.id}
+                  className="listbtn"
+                  aria-label={`${item.title} kitabını kuyruğa ekle`}
+                  disabled={lib.queue.length >= QUEUE_CAP}
+                  onClick={() => setLib((prev) => enqueueBook(prev, item.id))}
+                >
+                  {item.title}
+                  <div className="meta">{lib.queue.length >= QUEUE_CAP ? "Kuyruk dolu" : "Kuyruğa ekle"}</div>
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+
       {sheet === "more" && book && (
         <div className="sheet" onClick={() => setSheet(null)}>
           <div className="reader-menu" onClick={(e) => e.stopPropagation()}>
@@ -1440,6 +1526,10 @@ export function UnchainApp() {
             </div>
             <button className="listbtn" onClick={() => setSheet("contents")}>
               İçindekiler
+            </button>
+            <button className="listbtn" onClick={() => setSheet("queue")}>
+              Dinleme kuyruğu
+              <div className="meta">{lib.queue.length ? `${lib.queue.length} kitap` : "Boş"}</div>
             </button>
             <button className="listbtn" onClick={() => setSheet("sleep")}>
               Uyku zamanlayıcısı
@@ -1498,7 +1588,8 @@ export function UnchainApp() {
                 setLib((prev) => {
                   const books = prev.books.filter((b) => b.id !== book.id);
                   const fallback = books[0];
-                  return dropBookBookmarks(
+                  return dropBookQueue(
+                  dropBookBookmarks(
                     {
                       ...prev,
                       books,
@@ -1506,7 +1597,9 @@ export function UnchainApp() {
                       cursor: fallback ? { bookId: fallback.id, chapter: 0, sentence: 0, word: 0 } : null
                     },
                     book.id
-                  );
+                  ),
+                  book.id
+                );
                 });
                 setView("library");
                 setSheet(null);
