@@ -10,7 +10,8 @@
     "check:catalog": "tsx scripts/check-catalog.ts",
     "check:hesap": "tsx scripts/check-hesap.ts",
     "check:ortam": "tsx scripts/check-ortam.ts",
-    "check:tara": "tsx scripts/check-tara.ts"
+    "check:tara": "tsx scripts/check-tara.ts",
+    "check:seek": "tsx scripts/check-seek.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

@@ -297,28 +297,75 @@ export function moveSentences(book: Book, cursor: Cursor, delta: number): Cursor
   return { bookId: book.id, chapter, sentence: Math.max(0, Math.min(max, sentence)), word: 0 };
 }
 
+function wordOffset(text: string, word: number) {
+  const parts = text.split(/\s+/);
+  const index = Math.max(0, Math.min(word, Math.max(0, parts.length - 1)));
+  let offset = 0;
+  for (let i = 0; i < index; i += 1) offset += parts[i].length + 1;
+  return offset;
+}
+
+function wordIndexAt(text: string, offset: number) {
+  const parts = text.split(/\s+/);
+  if (!parts.length) return 0;
+  const at = Math.max(0, Math.min(offset, Math.max(0, text.length - 1)));
+  let cursor = 0;
+  let index = 0;
+  for (let i = 0; i < parts.length; i += 1) {
+    if (cursor <= at) index = i;
+    cursor += parts[i].length + 1;
+  }
+  return index;
+}
+
 export function moveBySeconds(book: Book, cursor: Cursor, seconds: number, speed: number) {
-  const chars = Math.round((900 / 60) * seconds * speed);
-  let chapter = cursor.chapter;
-  let sentence = cursor.sentence;
-  let left = chars;
-  const dir = seconds >= 0 ? 1 : -1;
-  while (left > 0) {
-    const text = book.chapters[chapter].sentences[sentence]?.text ?? "";
-    if (text.length >= left && dir > 0) break;
-    if (dir > 0 && text.length < left) {
-      left -= text.length;
-      const next = moveSentences(book, { bookId: book.id, chapter, sentence, word: 0 }, 1);
-      if (next.chapter === chapter && next.sentence === sentence) break;
-      chapter = next.chapter;
-      sentence = next.sentence;
+  const chapterCount = book.chapters.length;
+  const chapter = Math.max(0, Math.min(cursor.chapter, Math.max(0, chapterCount - 1)));
+  const sentences = book.chapters[chapter]?.sentences ?? [];
+  const sentence = Math.max(0, Math.min(cursor.sentence, Math.max(0, sentences.length - 1)));
+  const parts = sentences[sentence]?.text.split(/\s+/) ?? [];
+  const word = Math.max(0, Math.min(cursor.word, Math.max(0, parts.length - 1)));
+  const budget = Math.round((900 / 60) * Math.abs(seconds) * (speed > 0 ? speed : 1));
+  if (!budget || seconds === 0 || !sentences.length) return { bookId: book.id, chapter, sentence, word };
+  const dir = seconds > 0 ? 1 : -1;
+  let atChapter = chapter;
+  let atSentence = sentence;
+  let atWord = word;
+  let left = budget;
+  for (let hop = 0; hop < 10000 && left > 0; hop += 1) {
+    const text = book.chapters[atChapter].sentences[atSentence]?.text ?? "";
+    const offset = wordOffset(text, atWord);
+    if (dir > 0) {
+      const rest = text.length - offset;
+      if (rest >= left) {
+        atWord = wordIndexAt(text, offset + left);
+        break;
+      }
+      left -= rest;
+      const next = moveSentences(book, { bookId: book.id, chapter: atChapter, sentence: atSentence, word: 0 }, 1);
+      if (next.chapter === atChapter && next.sentence === atSentence) {
+        atWord = Math.max(0, text.split(/\s+/).length - 1);
+        break;
+      }
+      atChapter = next.chapter;
+      atSentence = next.sentence;
+      atWord = 0;
       continue;
     }
-    left += text.length;
-    const prev = moveSentences(book, { bookId: book.id, chapter, sentence, word: 0 }, -1);
-    if (prev.chapter === chapter && prev.sentence === sentence) break;
-    chapter = prev.chapter;
-    sentence = prev.sentence;
+    if (offset >= left) {
+      atWord = wordIndexAt(text, offset - left);
+      break;
+    }
+    left -= offset;
+    const prev = moveSentences(book, { bookId: book.id, chapter: atChapter, sentence: atSentence, word: 0 }, -1);
+    if (prev.chapter === atChapter && prev.sentence === atSentence) {
+      atWord = 0;
+      break;
+    }
+    atChapter = prev.chapter;
+    atSentence = prev.sentence;
+    const prevText = book.chapters[atChapter].sentences[atSentence]?.text ?? "";
+    atWord = Math.max(0, prevText.split(/\s+/).length - 1);
   }
-  return { bookId: book.id, chapter, sentence, word: 0 };
+  return { bookId: book.id, chapter: atChapter, sentence: atSentence, word: atWord };
 }

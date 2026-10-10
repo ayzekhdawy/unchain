@@ -214,8 +214,10 @@ export function UnchainApp() {
     const handle = { cancelled: false, timer: 0, source: null as AudioBufferSourceNode | null };
     const spokenBook = sentenceAt(book, cursor);
     const tokens = spokenBook.sentence.text.split(/\s+/);
-    const prepared = applySpeech(spokenBook.sentence.text, lib.pronunciations);
-    setWord(0);
+    const start = Math.max(0, Math.min(cursor.word, Math.max(0, tokens.length - 1)));
+    const spokenText = tokens.slice(start).join(" ");
+    const prepared = applySpeech(spokenText, lib.pronunciations);
+    setWord(start);
 
     const advance = () => {
       if (handle.cancelled) return;
@@ -248,6 +250,7 @@ export function UnchainApp() {
     const browser = () => {
       setVoice("fallback");
       const ms = Math.max(700, ((prepared.length / 900) * 60_000) / lib.speed);
+      const spokenCount = Math.max(1, tokens.length - start);
       const utter = new SpeechSynthesisUtterance(prepared);
       utter.lang = "tr-TR";
       utter.rate = Math.min(2, Math.max(0.5, lib.speed));
@@ -257,8 +260,8 @@ export function UnchainApp() {
       let step = 0;
       handle.timer = window.setInterval(() => {
         step += 1;
-        if (step < tokens.length) setWord(step);
-      }, ms / Math.max(1, tokens.length));
+        if (start + step < tokens.length) setWord(start + step);
+      }, ms / spokenCount);
       utter.onend = () => {
         if (handle.cancelled) return;
         window.clearInterval(handle.timer);
@@ -316,7 +319,7 @@ export function UnchainApp() {
           const at = ctx.currentTime - origin;
           let index = 0;
           while (index + 1 < clip.wordStarts.length && clip.wordStarts[index + 1] <= at) index += 1;
-          setWord(tokens.length ? Math.min(index, tokens.length - 1) : 0);
+          setWord(tokens.length ? Math.min(start + index, tokens.length - 1) : 0);
         }, 40);
       } catch (err) {
         if (handle.cancelled) return;
@@ -392,13 +395,14 @@ export function UnchainApp() {
           ? prev.cursor
           : { bookId: target.id, chapter: 0, sentence: 0, word: 0 }
     }));
-    setWord(0);
+    const kept = lib.cursor?.bookId === target.id ? lib.cursor : { bookId: target.id, chapter: 0, sentence: 0, word: 0 };
+    setWord(kept.word);
     setView("reader");
     setSheet(null);
   }
 
   function seek(next: Cursor) {
-    setWord(0);
+    setWord(next.word);
     setLib((prev) => ({ ...prev, cursor: next, currentId: next.bookId }));
   }
 
@@ -406,6 +410,30 @@ export function UnchainApp() {
     if (!book || !cursor) return;
     seek(moveBySeconds(book, cursor, seconds, lib.speed));
   }
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) return;
+      }
+      if (sheet || pending || !book || !cursor) return;
+      if (event.code === "Space") {
+        if (event.repeat) return;
+        event.preventDefault();
+        togglePlay();
+        return;
+      }
+      if (event.code !== "ArrowLeft" && event.code !== "ArrowRight") return;
+      event.preventDefault();
+      const step = event.shiftKey ? 30 : 15;
+      skip(event.code === "ArrowLeft" ? -step : step);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheet, pending, book, cursor, lib.speed]);
 
   function togglePlay() {
     resumeAudio();
@@ -1098,6 +1126,7 @@ export function UnchainApp() {
                   {lib.speed.toFixed(1)}x
                 </button>
               </div>
+              <p className="note">Boşluk oynatır veya durdurur. Oklar 15 saniye, Shift ile 30 saniye.</p>
               <AmbientRow
                 ambient={lib.ambient}
                 level={lib.ambientLevel}
