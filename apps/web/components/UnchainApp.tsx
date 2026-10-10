@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
   addCollection,
   applySpeech,
@@ -38,6 +38,7 @@ import { FILE_MAX } from "@/lib/hesap";
 import { ImportError, importFile } from "@/lib/import";
 import { setAmbient, stopAmbient } from "@/lib/ortam";
 import { bookFromScan, readScan } from "@/lib/tara";
+import { SWIPE_WIDTH, swipeAxis, swipeOffset, swipeSettlesOpen } from "@/lib/kaydir";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
 type LibTab = "saved" | "collections" | "archive";
@@ -114,6 +115,7 @@ export function UnchainApp() {
   const [scanning, setScanning] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
   const [openBook, setOpenBook] = useState<string | null>(null);
+  const [picker, setPicker] = useState<string | null>(null);
   const [collectionName, setCollectionName] = useState("");
   const [openCollection, setOpenCollection] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -720,6 +722,7 @@ export function UnchainApp() {
                 </button>
               ))}
             </div>
+            <p className="note">Sola kaydır: koleksiyon, okunmadı, arşiv.</p>
             {tab === "saved" && (
               <div className="pills" style={{ marginTop: 8 }}>
                 {(
@@ -781,19 +784,53 @@ export function UnchainApp() {
                 )}
                 {listed.map((item) => (
                 <div key={item.id}>
-                  <button className="bookline" onClick={() => openReader(item)}>
-                    <span className="cover" style={{ background: item.cover }} />
-                    <span>
-                      <span className="meta">{item.source}</span>
-                      <br />
-                      <b>{item.title}</b>
-                      <br />
-                      <span className="meta">
-                        {item.author} · {item.minutes} dk {item.unread ? "" : "· okundu"}
+                  <SwipeRow
+                    open={openBook === item.id}
+                    onOpen={(next) => {
+                      if (next) {
+                        setOpenBook(item.id);
+                        setPicker((current) => (current === item.id ? current : null));
+                        return;
+                      }
+                      if (openBook === item.id) setOpenBook(null);
+                      setPicker((current) => (current === item.id ? null : current));
+                    }}
+                    actions={
+                      <>
+                        <button className="collect" aria-label="Koleksiyona ekle" onClick={() => setPicker(picker === item.id ? null : item.id)}>
+                          Koleksiyon
+                        </button>
+                        <button
+                          className="unread"
+                          aria-label={item.unread ? "Okundu işaretle" : "Okunmadı işaretle"}
+                          onClick={() => patchBook(item.id, { unread: !item.unread })}
+                        >
+                          {item.unread ? "Okundu" : "Okunmadı"}
+                        </button>
+                        <button
+                          className="archive"
+                          aria-label={item.archived ? "Arşivden geri al" : "Arşivle"}
+                          onClick={() => patchBook(item.id, { archived: !item.archived })}
+                        >
+                          {item.archived ? "Geri al" : "Arşiv"}
+                        </button>
+                      </>
+                    }
+                  >
+                    <button className="bookline" onClick={() => openReader(item)}>
+                      <span className="cover" style={{ background: item.cover }} />
+                      <span>
+                        <span className="meta">{item.source}</span>
+                        <br />
+                        <b>{item.title}</b>
+                        <br />
+                        <span className="meta">
+                          {item.author} · {item.minutes} dk {item.unread ? "" : "· okundu"}
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                  {openBook === item.id && (
+                    </button>
+                  </SwipeRow>
+                  {picker === item.id && (
                     <div className="actions-inline">
                       {lib.collections.map((name) => (
                         <button
@@ -806,17 +843,8 @@ export function UnchainApp() {
                       {!lib.collections.includes("Sonra oku") && (
                         <button onClick={() => setLib((prev) => assignCollection(prev, item.id, "Sonra oku"))}>Sonra oku</button>
                       )}
-                      <button onClick={() => patchBook(item.id, { unread: !item.unread })}>
-                        {item.unread ? "Okundu işaretle" : "Okunmadı işaretle"}
-                      </button>
-                      <button onClick={() => patchBook(item.id, { archived: !item.archived })}>
-                        {item.archived ? "Geri al" : "Arşivle"}
-                      </button>
                     </div>
                   )}
-                  <button className="ghost" onClick={() => setOpenBook(openBook === item.id ? null : item.id)}>
-                    İşlemler
-                  </button>
                 </div>
               ))}
                 {listed.length === 0 && <p className="note">Bu rafta kitap yok.</p>}
@@ -1396,6 +1424,99 @@ export function UnchainApp() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SwipeRow({
+  open,
+  onOpen,
+  actions,
+  children
+}: {
+  open: boolean;
+  onOpen: (open: boolean) => void;
+  actions: ReactNode;
+  children: ReactNode;
+}) {
+  const [x, setX] = useState(open ? -SWIPE_WIDTH : 0);
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef({ id: -1, x: 0, y: 0, origin: 0, axis: "none" as "none" | "x" | "y", moved: false, active: false });
+
+  useEffect(() => {
+    if (!dragging) setX(open ? -SWIPE_WIDTH : 0);
+  }, [open, dragging]);
+
+  function down(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    drag.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      origin: open ? -SWIPE_WIDTH : 0,
+      axis: "none",
+      moved: false,
+      active: true
+    };
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* işaretçi bu olayda yakalanamıyorsa sürükleme öğenin üstünde sürer */
+    }
+  }
+
+  function move(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!drag.current.active || event.pointerId !== drag.current.id) return;
+    const dx = event.clientX - drag.current.x;
+    const dy = event.clientY - drag.current.y;
+    if (drag.current.axis === "none") {
+      const axis = swipeAxis(dx, dy);
+      if (axis === "none") return;
+      drag.current.axis = axis;
+      if (axis === "y") {
+        drag.current.moved = true;
+        return;
+      }
+      setDragging(true);
+    }
+    if (drag.current.axis !== "x") return;
+    drag.current.moved = true;
+    setX(swipeOffset(drag.current.origin, dx));
+  }
+
+  function up(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!drag.current.active || event.pointerId !== drag.current.id) return;
+    const axis = drag.current.axis;
+    drag.current.active = false;
+    setDragging(false);
+    if (axis !== "x") return;
+    const next = swipeOffset(drag.current.origin, event.clientX - drag.current.x);
+    const settled = swipeSettlesOpen(next);
+    setX(settled ? -SWIPE_WIDTH : 0);
+    onOpen(settled);
+  }
+
+  return (
+    <div className={dragging ? "swipe dragging" : "swipe"} data-open={open ? "true" : "false"}>
+      <div className="swipe-actions" style={{ width: SWIPE_WIDTH }} onFocus={() => onOpen(true)}>
+        {actions}
+      </div>
+      <div
+        className="swipe-front"
+        style={{ transform: `translateX(${x}px)` }}
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+        onClickCapture={(event) => {
+          if (!drag.current.moved) return;
+          event.preventDefault();
+          event.stopPropagation();
+          drag.current.moved = false;
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

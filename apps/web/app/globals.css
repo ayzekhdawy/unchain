@@ -48,7 +48,7 @@ h1 { font-size: clamp(40px, 6vw, 72px); line-height: 0.96; letter-spacing: -0.04
 }
 .btn.solid { background: var(--play); color: #121316; font-weight: 650; }
 .btn:focus-visible, .iconbtn:focus-visible, .pill:focus-visible, .chip:focus-visible,
-.ghost:focus-visible, .listbtn:focus-visible, .tabs button:focus-visible,
+.ghost:focus-visible, .listbtn:focus-visible, .tabs button:focus-visible, .swipe-actions button:focus-visible,
 .play:focus-visible, .rail button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 .facts { display: grid; gap: 10px; margin-top: 36px; }
 .facts div { border-top: 1px solid var(--line); padding-top: 10px; }
@@ -100,8 +100,20 @@ h1 { font-size: clamp(40px, 6vw, 72px); line-height: 0.96; letter-spacing: -0.04
 .bookline b { font-size: 18px; }
 .meta { color: var(--mute); font-size: 14px; display: block; }
 .ok { color: var(--spoken); }
-.actions-inline { display: flex; gap: 8px; margin-top: 8px; }
-.actions-inline button { border: 0; background: var(--raise); border-radius: 999px; padding: 6px 10px; font-size: 13px; }
+.actions-inline { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.actions-inline button { border: 0; background: var(--raise); border-radius: 999px; padding: 8px 12px; font-size: 13px; min-height: 48px; }
+.swipe { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+.swipe-actions { position: absolute; top: 0; right: 0; bottom: 0; display: flex; }
+.swipe-actions button { flex: 1; border: 0; min-width: 0; padding: 8px; font-size: 13px; line-height: 1.2; }
+.swipe-actions button.collect { background: var(--signal); color: #16140f; }
+.swipe-actions button.unread { background: var(--raise); }
+.swipe-actions button.archive { background: var(--line); }
+.swipe-front { position: relative; z-index: 1; background: var(--ink); touch-action: pan-y; }
+.swipe:not(.dragging) .swipe-front { transition: transform 160ms ease; }
+.swipe .bookline { border-bottom: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .swipe-front { transition: none; }
+}
 .cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 .card {
   background: var(--panel); border-radius: 18px; min-height: 140px; padding: 16px;
@@ -206,6 +218,7 @@ html[data-theme="kagit"] {
   --play: #16140f;
   color-scheme: light;
 }
+html[data-theme="kagit"] .swipe-actions button.collect { color: #f4f1ea; }
 html[data-theme="kagit"] .btn.solid,
 html[data-theme="kagit"] .pill.on,
 html[data-theme="kagit"] .controls .play,
