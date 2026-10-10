@@ -37,7 +37,8 @@ import { emaSpeak, loadEma, resampleLinear, resumeAudio } from "@/lib/ema";
 import { FILE_MAX } from "@/lib/hesap";
 import { ImportError, importFile } from "@/lib/import";
 import { setAmbient, stopAmbient } from "@/lib/ortam";
-import { bookFromScan, readScan } from "@/lib/tara";
+import { pdfScanTitle } from "@/lib/pdf-sayfa";
+import { bookFromScan, readPdfScan, readScan } from "@/lib/tara";
 import { SWIPE_WIDTH, swipeAxis, swipeOffset, swipeSettlesOpen } from "@/lib/kaydir";
 
 type View = "home" | "explore" | "library" | "voice" | "account" | "reader" | "write" | "link";
@@ -57,7 +58,7 @@ const THEMES: { id: ReadingTheme; label: string }[] = [
   { id: "kagit", label: "Kâğıt" }
 ];
 const FORMAT_NOTE = "PDF, EPUB, DOCX, ODT, RTF, FB2, TXT ve MD bu tarayıcıda açılır.";
-const SCAN_NOTE = "PNG, JPEG ve WebP bu tarayıcıda okunur. Görüntü sunucuya gitmez.";
+const SCAN_NOTE = "PNG, JPEG, WebP ve metinsiz PDF sayfası bu tarayıcıda okunur. Görüntü sunucuya gitmez.";
 
 const SLEEP = [
   { id: "off", label: "Kapalı" },
@@ -113,6 +114,7 @@ export function UnchainApp() {
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [scanLabel, setScanLabel] = useState("Okunuyor…");
   const [importNote, setImportNote] = useState<string | null>(null);
   const [openBook, setOpenBook] = useState<string | null>(null);
   const [picker, setPicker] = useState<string | null>(null);
@@ -493,8 +495,27 @@ export function UnchainApp() {
       const result = await importFile(file, lib.profileName);
       stageBook(result.book, result.warning, sessionEmail ? file : undefined);
     } catch (err) {
-      setImportError(err instanceof ImportError ? err.message : "Dosya açılamadı.");
+      const scanPdf = file.name.toLowerCase().endsWith(".pdf") && err instanceof ImportError && err.message.includes("seçilebilir metin");
+      if (!scanPdf) {
+        setImportError(err instanceof ImportError ? err.message : "Dosya açılamadı.");
+        setSheet("import");
+        return;
+      }
+      setImportError("");
       setSheet("import");
+      setScanLabel("Sayfa okunuyor…");
+      setScanning(true);
+      try {
+        const outcome = await readPdfScan(file, file.name, lib.profileName, (index, total) => {
+          setScanLabel(`Sayfa ${index} / ${total}`);
+        });
+        stageBook(outcome.book, outcome.warning, sessionEmail ? file : undefined);
+      } catch (scanErr) {
+        setImportError(scanErr instanceof ImportError ? scanErr.message : "PDF sayfası okunamadı.");
+        setSheet("import");
+      } finally {
+        setScanning(false);
+      }
     } finally {
       setImporting(false);
     }
@@ -514,6 +535,7 @@ export function UnchainApp() {
       setSheet("import");
       return;
     }
+    setScanLabel("Okunuyor…");
     setScanning(true);
     try {
       const text = await readScan(file);
@@ -1285,11 +1307,11 @@ export function UnchainApp() {
               >
                 Bağlantı yapıştır
               </button>
-              <button disabled={importing} onClick={() => fileRef.current?.click()}>
+              <button disabled={importing || scanning} onClick={() => fileRef.current?.click()}>
                 {importing ? "Ayrıştırılıyor…" : "Dosya yükle"}
               </button>
               <button disabled={scanning} onClick={() => scanRef.current?.click()}>
-                {scanning ? "Okunuyor…" : "Metin tara"}
+                {scanning ? scanLabel : "Metin tara"}
               </button>
               <button
                 onClick={() => {
